@@ -1,0 +1,58 @@
+{
+    "name": "amashukov/blockchain-context-bundle",
+    "description": "Symfony 7 bundle wiring the pure-PHP TON + EVM SDKs (amashukov/ton-php + amashukov/eth-php) into an application — autowired signature verification (EIP-191 + Ed25519/TonConnect), AES-256-GCM private-key encryption, and an HD deposit-wallet deriver port.",
+    "type": "symfony-bundle",
+    "license": "MIT",
+    "keywords": ["symfony", "symfony-bundle", "ethereum", "ton", "blockchain", "signature", "tonconnect", "eip-191"],
+    "authors": [
+        {
+            "name": "Andrei Mashukov",
+            "email": "a.mashukoff@gmail.com",
+            "homepage": "https://github.com/AndreyMashukov"
+        }
+    ],
+    "require": {
+        "php": ">=8.3",
+        "ext-gmp": "*",
+        "ext-openssl": "*",
+        "ext-sodium": "*",
+        "amashukov/eth-php": "^0.1.0",
+        "amashukov/ton-php": "^0.1.0",
+        "psr/log": "^3.0",
+        "symfony/config": "^7.0",
+        "symfony/dependency-injection": "^7.0",
+        "symfony/framework-bundle": "^7.0",
+        "symfony/http-kernel": "^7.0",
+        "symfony/yaml": "^7.0"
+    },
+    "require-dev": {
+        "amashukov/rector-php-rules": "^0.1.0",
+        "friendsofphp/php-cs-fixer": "^3.50",
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^11.0",
+        "rector/rector": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Amashukov\\BlockchainContextBundle\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Amashukov\\BlockchainContextBundle\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "symfony/flex": false
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "stan": "phpstan analyse --memory-limit=512M",
+        "cs": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix",
+        "rector": "rector process --dry-run"
+    }
+}

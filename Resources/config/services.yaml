@@ -1,0 +1,11 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    Amashukov\BlockchainContextBundle\Service\:
+        resource: '../../src/Service/'
+
+    Amashukov\BlockchainContextBundle\Service\PrivKeyEncrypter:
+        arguments:
+            $masterKeyB64: '%env(DEPOSIT_WALLET_ENCRYPTION_KEY)%'
