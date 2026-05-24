@@ -3,7 +3,12 @@
     "description": "Symfony 7 bundle wiring the pure-PHP TON + EVM SDKs (amashukov/ton-php + amashukov/eth-php) into an application — autowired signature verification (EIP-191 + Ed25519/TonConnect), AES-256-GCM private-key encryption, and an HD deposit-wallet deriver port.",
     "type": "symfony-bundle",
     "license": "MIT",
-    "keywords": ["symfony", "symfony-bundle", "ethereum", "ton", "blockchain", "signature", "tonconnect", "eip-191"],
+    "keywords": ["symfony", "symfony-bundle", "ethereum", "ton", "blockchain", "signature", "tonconnect", "eip-191", "php", "crypto-payments", "evm", "json-rpc"],
+    "homepage": "https://github.com/AndreyMashukov/blockchain-context-bundle",
+    "support": {
+        "issues": "https://github.com/AndreyMashukov/blockchain-context-bundle/issues",
+        "source": "https://github.com/AndreyMashukov/blockchain-context-bundle"
+    },
     "authors": [
         {
             "name": "Andrei Mashukov",
