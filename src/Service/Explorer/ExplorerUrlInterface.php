@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Amashukov\BlockchainContextBundle\Service\Explorer;
 
-interface ExplorerUrl
+interface ExplorerUrlInterface
 {
     public function forTx(string $chain, string $txHashOrLt): ?string;
 

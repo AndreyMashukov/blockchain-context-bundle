@@ -145,3 +145,8 @@ services:
     Amashukov\BlockchainContextBundle\Service\Gas\TonGasFetcherInterface: '@Amashukov\BlockchainContextBundle\Service\Gas\TonGasFetcher'
     Amashukov\BlockchainContextBundle\Service\Finality\FinalityVerifierInterface: '@Amashukov\BlockchainContextBundle\Service\Finality\DepthPollingFinalityVerifier'
     Amashukov\BlockchainContextBundle\Service\Time\SleeperInterface: '@Amashukov\BlockchainContextBundle\Service\Time\RealSleeper'
+
+    Amashukov\BlockchainContextBundle\Service\Explorer\DefaultExplorerUrl:
+        arguments:
+            $bridgeEthExplorer: '%blockchain_context.eth_explorer%'
+    Amashukov\BlockchainContextBundle\Service\Explorer\ExplorerUrlInterface: '@Amashukov\BlockchainContextBundle\Service\Explorer\DefaultExplorerUrl'

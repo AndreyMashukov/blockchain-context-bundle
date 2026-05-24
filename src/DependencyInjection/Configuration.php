@@ -24,6 +24,7 @@ final class Configuration implements ConfigurationInterface
                 ->integerNode('ton_finality_polls')->defaultValue(0)->min(0)->end()
                 ->scalarNode('bridge_ton_contract')->defaultValue('')->end()
                 ->scalarNode('usdt_token_address')->defaultValue('')->end()
+                ->scalarNode('eth_explorer')->defaultValue('')->end()
             ->end();
 
         return $treeBuilder;

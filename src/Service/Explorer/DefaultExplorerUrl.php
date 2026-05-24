@@ -6,7 +6,7 @@ namespace Amashukov\BlockchainContextBundle\Service\Explorer;
 
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-final readonly class DefaultExplorerUrl implements ExplorerUrl
+final readonly class DefaultExplorerUrl implements ExplorerUrlInterface
 {
     public function __construct(
         #[Autowire(param: 'bridge_eth_explorer_default')]
