@@ -3,15 +3,9 @@ services:
         autowire: true
         autoconfigure: true
 
-    _instanceof:
-        Amashukov\BlockchainContextBundle\Service\Detection\ChainDepositCheckInterface:
-            tags: ['blockchain_context.chain_deposit_check']
-        Amashukov\BlockchainContextBundle\Service\Finality\ConfirmationCheckInterface:
-            tags: ['blockchain_context.confirmation_check']
-        Amashukov\BlockchainContextBundle\Service\Finality\ConfirmationCounterInterface:
-            tags: ['blockchain_context.confirmation_counter']
-        Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxBuilderInterface:
-            tags: ['blockchain_context.deposit_tx_builder']
+    # Tag bindings for the 4 chain ports live in BlockchainContextExtension via
+    # registerForAutoconfiguration — container-global, so HOST-app impls of the
+    # interfaces (per-chain ConfirmationCheck / ChainDepositCheck) get tagged too.
 
     Amashukov\BlockchainContextBundle\:
         resource: '../../src/'
