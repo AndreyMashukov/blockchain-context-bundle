@@ -149,4 +149,5 @@ services:
     Amashukov\BlockchainContextBundle\Service\Explorer\DefaultExplorerUrl:
         arguments:
             $bridgeEthExplorer: '%blockchain_context.eth_explorer%'
+            $tonExplorer: '%blockchain_context.ton_explorer%'
     Amashukov\BlockchainContextBundle\Service\Explorer\ExplorerUrlInterface: '@Amashukov\BlockchainContextBundle\Service\Explorer\DefaultExplorerUrl'

@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace Amashukov\BlockchainContextBundle\Service\Explorer;
 
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
-
 final readonly class DefaultExplorerUrl implements ExplorerUrlInterface
 {
     public function __construct(
-        #[Autowire(param: 'bridge_eth_explorer_default')]
         private string $bridgeEthExplorer = 'https://etherscan.io',
         private string $tonExplorer = 'https://tonscan.org',
     ) {}

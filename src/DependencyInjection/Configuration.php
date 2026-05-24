@@ -25,6 +25,7 @@ final class Configuration implements ConfigurationInterface
                 ->scalarNode('bridge_ton_contract')->defaultValue('')->end()
                 ->scalarNode('usdt_token_address')->defaultValue('')->end()
                 ->scalarNode('eth_explorer')->defaultValue('')->end()
+                ->scalarNode('ton_explorer')->defaultValue('https://tonscan.org')->end()
             ->end();
 
         return $treeBuilder;
