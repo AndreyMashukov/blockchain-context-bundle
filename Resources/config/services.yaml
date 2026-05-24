@@ -40,7 +40,7 @@ services:
             $http: '@blockchain_context.eth_http_client'
             $requestFactory: '@Psr\Http\Message\RequestFactoryInterface'
             $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
-            $rpcUrl: '%blockchain_context.eth_rpc_url%'
+            $rpcUrl: '%blockchain_context.eth.rpc_url%'
     Amashukov\EthRpc\EthRpcClientInterface: '@Amashukov\EthRpc\EthRpcClient'
 
     Amashukov\EthRpc\JsonRpcProvider:
@@ -67,7 +67,7 @@ services:
     blockchain_context.toncenter_apikey:
         class: Amashukov\HttpClient\Middleware\HeaderInjectionMiddleware
         arguments:
-            $headers: { 'X-Api-Key': '%blockchain_context.toncenter_api_key%' }
+            $headers: { 'X-Api-Key': '%blockchain_context.ton.toncenter_api_key%' }
 
     blockchain_context.toncenter_http:
         class: Amashukov\HttpClient\Pipeline
@@ -90,15 +90,15 @@ services:
     # --- EVM signer (carved Eip1559Signer; bridge owner wallet) ---
     Amashukov\Eip1559TxSigner\Eip1559Signer:
         arguments:
-            $privateKey: '%blockchain_context.eth_wallet_private_key%'
-            $chainId: '%blockchain_context.eth_chain_id%'
+            $privateKey: '%blockchain_context.eth.wallet_private_key%'
+            $chainId: '%blockchain_context.eth.chain_id%'
 
     # --- TON owner wallet, built from mnemonic via the bundle factory ---
     Amashukov\BlockchainContextBundle\Service\Ton\WalletV4R2Factory: ~
     Amashukov\TonWallet\WalletV4R2:
         factory: ['@Amashukov\BlockchainContextBundle\Service\Ton\WalletV4R2Factory', 'create']
         arguments:
-            $mnemonic: '%blockchain_context.ton_wallet_mnemonic%'
+            $mnemonic: '%blockchain_context.ton.wallet_mnemonic%'
 
     # --- bundle services with explicit param-bound arguments ---
     Amashukov\BlockchainContextBundle\Service\PrivKeyEncrypter:
@@ -107,21 +107,21 @@ services:
 
     Amashukov\BlockchainContextBundle\Service\Finality\DepthPollingFinalityVerifier:
         arguments:
-            $polls: '%blockchain_context.ton_finality_polls%'
+            $polls: '%blockchain_context.ton.finality_polls%'
 
     # --- per-chain deposit-tx builders (scalar args from config params) ---
     Amashukov\BlockchainContextBundle\Service\TxBuilder\EthDepositTxBuilder:
         arguments:
-            $chainId: '%blockchain_context.eth_chain_id%'
+            $chainId: '%blockchain_context.eth.chain_id%'
 
     Amashukov\BlockchainContextBundle\Service\TxBuilder\Erc20DepositTxBuilder:
         arguments:
-            $usdtTokenAddress: '%blockchain_context.usdt_token_address%'
-            $chainId: '%blockchain_context.eth_chain_id%'
+            $usdtTokenAddress: '%blockchain_context.eth.usdt_token_address%'
+            $chainId: '%blockchain_context.eth.chain_id%'
 
     Amashukov\BlockchainContextBundle\Service\TxBuilder\TonJettonDepositTxBuilder:
         arguments:
-            $bridgeContractAddress: '%blockchain_context.bridge_ton_contract%'
+            $bridgeContractAddress: '%blockchain_context.ton.bridge_contract%'
 
     # --- tagged-iterator aggregator chains (members tagged via _instanceof above) ---
     Amashukov\BlockchainContextBundle\Service\Detection\ChainDepositCheckChain:
@@ -148,6 +148,6 @@ services:
 
     Amashukov\BlockchainContextBundle\Service\Explorer\DefaultExplorerUrl:
         arguments:
-            $bridgeEthExplorer: '%blockchain_context.eth_explorer%'
-            $tonExplorer: '%blockchain_context.ton_explorer%'
+            $bridgeEthExplorer: '%blockchain_context.eth.explorer%'
+            $tonExplorer: '%blockchain_context.ton.explorer%'
     Amashukov\BlockchainContextBundle\Service\Explorer\ExplorerUrlInterface: '@Amashukov\BlockchainContextBundle\Service\Explorer\DefaultExplorerUrl'

@@ -16,20 +16,26 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 final class BlockchainContextExtensionTest extends TestCase
 {
     /**
-     * @return array<string, scalar>
+     * @return array<string, mixed>
      */
     private function config(): array
     {
         return [
-            'eth_rpc_url'                   => 'http://rpc-proxy:9999',
-            'toncenter_api_key'             => 'k',
-            'eth_wallet_private_key'        => str_repeat('1', 64),
-            'eth_chain_id'                  => 11155111,
-            'ton_wallet_mnemonic'           => '',
+            'eth' => [
+                'rpc_url'            => 'http://rpc-proxy:9999',
+                'chain_id'           => 11155111,
+                'wallet_private_key' => str_repeat('1', 64),
+                'usdt_token_address' => '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+                'explorer'           => 'https://etherscan.io',
+            ],
+            'ton' => [
+                'enabled'           => false,
+                'toncenter_api_key' => 'k',
+                'wallet_mnemonic'   => '',
+                'bridge_contract'   => 'EQbridge',
+                'finality_polls'    => 3,
+            ],
             'deposit_wallet_encryption_key' => base64_encode(str_repeat("\x00", 32)),
-            'ton_finality_polls'            => 3,
-            'bridge_ton_contract'           => 'EQbridge',
-            'usdt_token_address'            => '0xdAC17F958D2ee523a2206206994597C13D831ec7',
         ];
     }
 
@@ -45,10 +51,12 @@ final class BlockchainContextExtensionTest extends TestCase
     {
         $container = $this->load();
 
-        self::assertSame('http://rpc-proxy:9999', $container->getParameter('blockchain_context.eth_rpc_url'));
-        self::assertSame(11155111, $container->getParameter('blockchain_context.eth_chain_id'));
-        self::assertSame(3, $container->getParameter('blockchain_context.ton_finality_polls'));
-        self::assertSame('EQbridge', $container->getParameter('blockchain_context.bridge_ton_contract'));
+        self::assertSame('http://rpc-proxy:9999', $container->getParameter('blockchain_context.eth.rpc_url'));
+        self::assertSame(11155111, $container->getParameter('blockchain_context.eth.chain_id'));
+        self::assertTrue($container->getParameter('blockchain_context.eth.enabled'));
+        self::assertSame(3, $container->getParameter('blockchain_context.ton.finality_polls'));
+        self::assertSame('EQbridge', $container->getParameter('blockchain_context.ton.bridge_contract'));
+        self::assertFalse($container->getParameter('blockchain_context.ton.enabled'));
     }
 
     public function testDefaultsApplyWhenHostOmitsConfig(): void
@@ -56,9 +64,12 @@ final class BlockchainContextExtensionTest extends TestCase
         $container = new ContainerBuilder();
         (new BlockchainContextExtension())->load([], $container);
 
-        self::assertSame('', $container->getParameter('blockchain_context.eth_rpc_url'));
-        self::assertSame(0, $container->getParameter('blockchain_context.eth_chain_id'));
-        self::assertSame(0, $container->getParameter('blockchain_context.ton_finality_polls'));
+        self::assertSame('', $container->getParameter('blockchain_context.eth.rpc_url'));
+        self::assertSame(0, $container->getParameter('blockchain_context.eth.chain_id'));
+        self::assertSame(0, $container->getParameter('blockchain_context.ton.finality_polls'));
+        self::assertSame('https://tonscan.org', $container->getParameter('blockchain_context.ton.explorer'));
+        self::assertTrue($container->getParameter('blockchain_context.eth.enabled'));
+        self::assertTrue($container->getParameter('blockchain_context.ton.enabled'));
     }
 
     public function testCoreServicesAreRegistered(): void

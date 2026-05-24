@@ -18,9 +18,12 @@ final class BlockchainContextExtension extends Extension
     {
         $config = $this->processConfiguration(new Configuration(), $configs);
 
-        foreach ($config as $key => $value) {
-            $container->setParameter('blockchain_context.' . $key, $value);
+        foreach (['eth', 'ton'] as $chain) {
+            foreach ($config[$chain] as $key => $value) {
+                $container->setParameter(sprintf('blockchain_context.%s.%s', $chain, $key), $value);
+            }
         }
+        $container->setParameter('blockchain_context.deposit_wallet_encryption_key', $config['deposit_wallet_encryption_key']);
 
         $loader = new YamlFileLoader(
             $container,

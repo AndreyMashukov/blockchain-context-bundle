@@ -60,22 +60,31 @@ The bundle is **env-agnostic**: it exposes a config tree and reads only
 `%blockchain_context.*%` parameters internally. The host maps them to its own
 environment (use `%env(...)%`, with `default:` processors as you like):
 
+Config is split per chain (`eth:` / `ton:`), each toggleable via `enabled`
+(default `true` — set `false` for a single-chain deployment):
+
 ```yaml
 # config/packages/blockchain_context.yaml
 blockchain_context:
-    eth_rpc_url:                   '%env(ETH_RPC_URL)%'                 # EVM JSON-RPC endpoint
-    toncenter_api_key:             '%env(TONCENTER_API_KEY)%'           # optional — lifts toncenter rate limit
-    eth_wallet_private_key:        '%env(BRIDGE_ETH_WALLET_PRIVATE_KEY)%'
-    eth_chain_id:                  '%env(int:BRIDGE_ETH_CHAIN_ID)%'
-    ton_wallet_mnemonic:           '%env(BRIDGE_TON_WALLET_MNEMONIC)%'
+    eth:
+        enabled:            true
+        rpc_url:            '%env(ETH_RPC_URL)%'                  # EVM JSON-RPC endpoint
+        chain_id:          '%env(int:BRIDGE_ETH_CHAIN_ID)%'
+        wallet_private_key:'%env(BRIDGE_ETH_WALLET_PRIVATE_KEY)%'
+        usdt_token_address:'%env(USDT_TOKEN_ADDRESS)%'           # USDT-ERC20 deposits
+        explorer:          '%env(BRIDGE_ETH_EXPLORER)%'          # default https://etherscan.io
+    ton:
+        enabled:            true
+        toncenter_api_key: '%env(TONCENTER_API_KEY)%'            # optional — lifts toncenter rate limit
+        wallet_mnemonic:   '%env(BRIDGE_TON_WALLET_MNEMONIC)%'
+        bridge_contract:   '%env(BRIDGE_TON_CONTRACT)%'          # USDT-Jetton deposits
+        finality_polls:    '%env(int:TON_FINALITY_POLLS)%'       # 0 = skip depth re-poll
+        explorer:          '%env(TON_EXPLORER)%'                 # default https://tonscan.org
     deposit_wallet_encryption_key: '%env(DEPOSIT_WALLET_ENCRYPTION_KEY)%' # base64 of 32 bytes
-    ton_finality_polls:            '%env(int:TON_FINALITY_POLLS)%'       # 0 = skip depth re-poll
-    bridge_ton_contract:           '%env(BRIDGE_TON_CONTRACT)%'          # only for USDT-Jetton deposits
-    usdt_token_address:            '%env(USDT_TOKEN_ADDRESS)%'           # only for USDT-ERC20 deposits
 ```
 
-Every key is optional (sensible empty / `0` defaults), so a host that uses only
-one chain still boots.
+Every key is optional (sensible empty / `0` / explorer defaults), so a host that
+uses only one chain can leave the other section's values unset (or `enabled: false`).
 
 ## Usage
 
