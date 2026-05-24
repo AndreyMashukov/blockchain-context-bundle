@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Amashukov\BlockchainContextBundle\Service\Finality;
 
 use LogicException;
-use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 
 final readonly class ConfirmationCounterRegistry
 {
@@ -13,7 +12,6 @@ final readonly class ConfirmationCounterRegistry
      * @param iterable<ConfirmationCounterInterface> $counters
      */
     public function __construct(
-        #[AutowireIterator('blockchain_context.confirmation_counter')]
         private iterable $counters,
     ) {}
 

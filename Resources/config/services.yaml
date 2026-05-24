@@ -4,8 +4,14 @@ services:
         autoconfigure: true
 
     _instanceof:
+        Amashukov\BlockchainContextBundle\Service\Detection\ChainDepositCheckInterface:
+            tags: ['blockchain_context.chain_deposit_check']
+        Amashukov\BlockchainContextBundle\Service\Finality\ConfirmationCheckInterface:
+            tags: ['blockchain_context.confirmation_check']
         Amashukov\BlockchainContextBundle\Service\Finality\ConfirmationCounterInterface:
             tags: ['blockchain_context.confirmation_counter']
+        Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxBuilderInterface:
+            tags: ['blockchain_context.deposit_tx_builder']
 
     Amashukov\BlockchainContextBundle\:
         resource: '../../src/'
@@ -34,7 +40,7 @@ services:
             $http: '@blockchain_context.eth_http_client'
             $requestFactory: '@Psr\Http\Message\RequestFactoryInterface'
             $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
-            $rpcUrl: '%env(ETH_RPC_URL)%'
+            $rpcUrl: '%blockchain_context.eth_rpc_url%'
     Amashukov\EthRpc\EthRpcClientInterface: '@Amashukov\EthRpc\EthRpcClient'
 
     Amashukov\EthRpc\JsonRpcProvider:
@@ -61,7 +67,7 @@ services:
     blockchain_context.toncenter_apikey:
         class: Amashukov\HttpClient\Middleware\HeaderInjectionMiddleware
         arguments:
-            $headers: { 'X-Api-Key': '%env(TONCENTER_API_KEY)%' }
+            $headers: { 'X-Api-Key': '%blockchain_context.toncenter_api_key%' }
 
     blockchain_context.toncenter_http:
         class: Amashukov\HttpClient\Pipeline
@@ -84,24 +90,55 @@ services:
     # --- EVM signer (carved Eip1559Signer; bridge owner wallet) ---
     Amashukov\Eip1559TxSigner\Eip1559Signer:
         arguments:
-            $privateKey: '%env(string:BRIDGE_ETH_WALLET_PRIVATE_KEY)%'
-            $chainId: '%env(int:BRIDGE_ETH_CHAIN_ID)%'
+            $privateKey: '%blockchain_context.eth_wallet_private_key%'
+            $chainId: '%blockchain_context.eth_chain_id%'
 
     # --- TON owner wallet, built from mnemonic via the bundle factory ---
     Amashukov\BlockchainContextBundle\Service\Ton\WalletV4R2Factory: ~
     Amashukov\TonWallet\WalletV4R2:
         factory: ['@Amashukov\BlockchainContextBundle\Service\Ton\WalletV4R2Factory', 'create']
         arguments:
-            $mnemonic: '%env(string:BRIDGE_TON_WALLET_MNEMONIC)%'
+            $mnemonic: '%blockchain_context.ton_wallet_mnemonic%'
 
-    # --- bundle services with explicit env-bound arguments ---
+    # --- bundle services with explicit param-bound arguments ---
     Amashukov\BlockchainContextBundle\Service\PrivKeyEncrypter:
         arguments:
-            $masterKeyB64: '%env(DEPOSIT_WALLET_ENCRYPTION_KEY)%'
+            $masterKeyB64: '%blockchain_context.deposit_wallet_encryption_key%'
 
     Amashukov\BlockchainContextBundle\Service\Finality\DepthPollingFinalityVerifier:
         arguments:
-            $polls: '%env(int:TON_FINALITY_CONFIRMATION_POLLS)%'
+            $polls: '%blockchain_context.ton_finality_polls%'
+
+    # --- per-chain deposit-tx builders (scalar args from config params) ---
+    Amashukov\BlockchainContextBundle\Service\TxBuilder\EthDepositTxBuilder:
+        arguments:
+            $chainId: '%blockchain_context.eth_chain_id%'
+
+    Amashukov\BlockchainContextBundle\Service\TxBuilder\Erc20DepositTxBuilder:
+        arguments:
+            $usdtTokenAddress: '%blockchain_context.usdt_token_address%'
+            $chainId: '%blockchain_context.eth_chain_id%'
+
+    Amashukov\BlockchainContextBundle\Service\TxBuilder\TonJettonDepositTxBuilder:
+        arguments:
+            $bridgeContractAddress: '%blockchain_context.bridge_ton_contract%'
+
+    # --- tagged-iterator aggregator chains (members tagged via _instanceof above) ---
+    Amashukov\BlockchainContextBundle\Service\Detection\ChainDepositCheckChain:
+        arguments:
+            $checks: !tagged_iterator 'blockchain_context.chain_deposit_check'
+
+    Amashukov\BlockchainContextBundle\Service\Finality\ConfirmationCheckChain:
+        arguments:
+            $checks: !tagged_iterator 'blockchain_context.confirmation_check'
+
+    Amashukov\BlockchainContextBundle\Service\Finality\ConfirmationCounterRegistry:
+        arguments:
+            $counters: !tagged_iterator 'blockchain_context.confirmation_counter'
+
+    Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxBuilderChain:
+        arguments:
+            $builders: !tagged_iterator 'blockchain_context.deposit_tx_builder'
 
     # --- domain interface → impl aliases ---
     Amashukov\BlockchainContextBundle\Service\Gas\EthGasFetcherInterface: '@Amashukov\BlockchainContextBundle\Service\Gas\EthGasFetcher'

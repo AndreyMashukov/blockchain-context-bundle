@@ -16,12 +16,16 @@ final class BlockchainContextExtension extends Extension
      */
     public function load(array $configs, ContainerBuilder $container): void
     {
+        $config = $this->processConfiguration(new Configuration(), $configs);
+
+        foreach ($config as $key => $value) {
+            $container->setParameter('blockchain_context.' . $key, $value);
+        }
+
         $loader = new YamlFileLoader(
             $container,
             new FileLocator(__DIR__ . '/../../Resources/config/'),
         );
         $loader->load('services.yaml');
-
-        $this->processConfiguration(new Configuration(), $configs);
     }
 }
