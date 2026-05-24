@@ -3,9 +3,108 @@ services:
         autowire: true
         autoconfigure: true
 
-    Amashukov\BlockchainContextBundle\Service\:
-        resource: '../../src/Service/'
+    _instanceof:
+        Amashukov\BlockchainContextBundle\Service\Finality\ConfirmationCounterInterface:
+            tags: ['blockchain_context.confirmation_counter']
 
+    Amashukov\BlockchainContextBundle\:
+        resource: '../../src/'
+        exclude:
+            - '../../src/BlockchainContextBundle.php'
+            - '../../src/DependencyInjection/'
+            - '../../src/ValueObject/'
+
+    # --- PSR-17 message factories (nyholm) ---
+    Nyholm\Psr7\Factory\Psr17Factory: ~
+    Psr\Http\Message\RequestFactoryInterface: '@Nyholm\Psr7\Factory\Psr17Factory'
+    Psr\Http\Message\StreamFactoryInterface: '@Nyholm\Psr7\Factory\Psr17Factory'
+    Psr\Http\Message\ResponseFactoryInterface: '@Nyholm\Psr7\Factory\Psr17Factory'
+
+    # --- ETH JSON-RPC transport (PSR-18 over ext-curl) ---
+    blockchain_context.eth_http_client:
+        class: Amashukov\HttpClient\CurlClient
+        arguments:
+            $responseFactory: '@Psr\Http\Message\ResponseFactoryInterface'
+            $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
+            $timeoutSeconds: 60
+            $connectTimeoutSeconds: 60
+
+    Amashukov\EthRpc\EthRpcClient:
+        arguments:
+            $http: '@blockchain_context.eth_http_client'
+            $requestFactory: '@Psr\Http\Message\RequestFactoryInterface'
+            $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
+            $rpcUrl: '%env(ETH_RPC_URL)%'
+    Amashukov\EthRpc\EthRpcClientInterface: '@Amashukov\EthRpc\EthRpcClient'
+
+    Amashukov\EthRpc\JsonRpcProvider:
+        arguments:
+            $client: '@Amashukov\EthRpc\EthRpcClient'
+    Amashukov\EthRpc\JsonRpcProviderInterface: '@Amashukov\EthRpc\JsonRpcProvider'
+
+    # --- TON toncenter transport (CurlClient + X-Api-Key + 5xx/429 retry middleware) ---
+    blockchain_context.ton_curl_client:
+        class: Amashukov\HttpClient\CurlClient
+        arguments:
+            $responseFactory: '@Psr\Http\Message\ResponseFactoryInterface'
+            $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
+            $timeoutSeconds: 60
+            $connectTimeoutSeconds: 60
+
+    blockchain_context.toncenter_retry:
+        class: Amashukov\HttpClient\Middleware\RetryMiddleware
+        arguments:
+            $maxAttempts: 3
+            $retryStatusCodes: [429, 500, 502, 503, 504, 542]
+            $baseDelayMs: 500
+
+    blockchain_context.toncenter_apikey:
+        class: Amashukov\HttpClient\Middleware\HeaderInjectionMiddleware
+        arguments:
+            $headers: { 'X-Api-Key': '%env(TONCENTER_API_KEY)%' }
+
+    blockchain_context.toncenter_http:
+        class: Amashukov\HttpClient\Pipeline
+        arguments:
+            $inner: '@blockchain_context.ton_curl_client'
+            $middlewares:
+                - '@blockchain_context.toncenter_apikey'
+                - '@blockchain_context.toncenter_retry'
+
+    Amashukov\Toncenter\ToncenterClient:
+        arguments:
+            $http: '@blockchain_context.toncenter_http'
+            $requestFactory: '@Psr\Http\Message\RequestFactoryInterface'
+            $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
+    Amashukov\Toncenter\ToncenterClientInterface: '@Amashukov\Toncenter\ToncenterClient'
+
+    Amashukov\Toncenter\ToncenterWalletRpc: ~
+    Amashukov\TonWallet\WalletRpcInterface: '@Amashukov\Toncenter\ToncenterWalletRpc'
+
+    # --- EVM signer (carved Eip1559Signer; bridge owner wallet) ---
+    Amashukov\Eip1559TxSigner\Eip1559Signer:
+        arguments:
+            $privateKey: '%env(string:BRIDGE_ETH_WALLET_PRIVATE_KEY)%'
+            $chainId: '%env(int:BRIDGE_ETH_CHAIN_ID)%'
+
+    # --- TON owner wallet, built from mnemonic via the bundle factory ---
+    Amashukov\BlockchainContextBundle\Service\Ton\WalletV4R2Factory: ~
+    Amashukov\TonWallet\WalletV4R2:
+        factory: ['@Amashukov\BlockchainContextBundle\Service\Ton\WalletV4R2Factory', 'create']
+        arguments:
+            $mnemonic: '%env(string:BRIDGE_TON_WALLET_MNEMONIC)%'
+
+    # --- bundle services with explicit env-bound arguments ---
     Amashukov\BlockchainContextBundle\Service\PrivKeyEncrypter:
         arguments:
             $masterKeyB64: '%env(DEPOSIT_WALLET_ENCRYPTION_KEY)%'
+
+    Amashukov\BlockchainContextBundle\Service\Finality\DepthPollingFinalityVerifier:
+        arguments:
+            $polls: '%env(int:TON_FINALITY_CONFIRMATION_POLLS)%'
+
+    # --- domain interface → impl aliases ---
+    Amashukov\BlockchainContextBundle\Service\Gas\EthGasFetcherInterface: '@Amashukov\BlockchainContextBundle\Service\Gas\EthGasFetcher'
+    Amashukov\BlockchainContextBundle\Service\Gas\TonGasFetcherInterface: '@Amashukov\BlockchainContextBundle\Service\Gas\TonGasFetcher'
+    Amashukov\BlockchainContextBundle\Service\Finality\FinalityVerifierInterface: '@Amashukov\BlockchainContextBundle\Service\Finality\DepthPollingFinalityVerifier'
+    Amashukov\BlockchainContextBundle\Service\Time\SleeperInterface: '@Amashukov\BlockchainContextBundle\Service\Time\RealSleeper'
