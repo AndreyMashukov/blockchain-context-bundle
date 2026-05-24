@@ -11,7 +11,7 @@ use Psr\Log\NullLogger;
 use RuntimeException;
 use Throwable;
 
-readonly class SignatureVerifier
+final readonly class SignatureVerifier implements SignatureVerifierInterface
 {
     private const string ETH_PREFIX = "\x19Ethereum Signed Message:\n";
 
