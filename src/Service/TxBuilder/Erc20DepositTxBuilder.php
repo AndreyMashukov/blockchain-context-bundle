@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Amashukov\BlockchainContextBundle\Service\TxBuilder;
 
 use Amashukov\AbiEncoder\AbiEncoder;
-use Amashukov\EthRpc\Numeric\HexInt;
 use Amashukov\BlockchainContextBundle\Service\Numeric\UuidIntCodec;
+use Amashukov\EthRpc\EthRpcClientInterface;
+use Amashukov\EthRpc\Numeric\HexBig;
+use Amashukov\EthRpc\Numeric\HexInt;
 use InvalidArgumentException;
+use Throwable;
 
 final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
 {
@@ -15,6 +18,7 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
         private string $usdtTokenAddress,
         private int $chainId,
         private UuidIntCodec $uuidIntCodec,
+        private ?EthRpcClientInterface $ethRpc = null,
     ) {}
 
     public function supports(string $chain): bool
@@ -68,27 +72,65 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
         ]);
     }
 
-
     public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
     {
-        $payload    = $this->build($order, $context);
-        $fromAmount = (string) $order->getFromAmount();
-        $approveTx  = $payload->payload['approve'] ?? null;
+        $payload     = $this->build($order, $context);
+        $fromAmount  = (string) $order->getFromAmount();
+        $userAddress = $context['userAddress'] ?? '';
 
-        if (is_array($approveTx)) {
+        if ('' === $userAddress) {
+            throw new InvalidArgumentException('Erc20DepositTxBuilder::nextStep requires context[userAddress] for allowance check.');
+        }
+
+        $bridge      = strtolower((string) $order->getDepositAddress());
+        $token       = strtolower($this->usdtTokenAddress);
+        $amountUnits = bcmul((string) $fromAmount, '1000000', 0);
+
+        if ($this->hasSufficientAllowance($token, $userAddress, $bridge, $amountUnits)) {
             return new DepositTxStep(
-                kind: 'evm-approve',
-                buttonLabel: sprintf('Approve %s USDT spending', $fromAmount),
-                tx: $approveTx,
+                kind: 'evm-deposit-erc20',
+                buttonLabel: sprintf('Deposit %s USDT to bridge', $fromAmount),
+                tx: $payload->payload['deposit'] ?? null,
                 done: false,
             );
         }
 
         return new DepositTxStep(
-            kind: 'evm-deposit-erc20',
-            buttonLabel: sprintf('Deposit %s USDT to bridge', $fromAmount),
-            tx: $payload->payload['deposit'] ?? null,
+            kind: 'evm-approve',
+            buttonLabel: sprintf('Approve %s USDT spending', $fromAmount),
+            tx: $payload->payload['approve'] ?? null,
             done: false,
         );
+    }
+
+    private function hasSufficientAllowance(string $token, string $userAddress, string $bridge, string $requiredUnits): bool
+    {
+        if (null === $this->ethRpc) {
+            return false;
+        }
+
+        try {
+            $callData = AbiEncoder::encodeCall(
+                'allowance(address,address)',
+                [
+                    ['address', strtolower($userAddress)],
+                    ['address', $bridge],
+                ],
+            );
+            $result = $this->ethRpc->eth_call([
+                'to'   => $token,
+                'data' => $callData,
+            ], 'latest');
+        } catch (Throwable) {
+            return false;
+        }
+
+        if (!is_string($result) || '' === $result || '0x' === $result) {
+            return false;
+        }
+
+        $allowance = HexBig::fromHex($result);
+
+        return bccomp($allowance, $requiredUnits, 0) >= 0;
     }
 }
