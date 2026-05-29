@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Amashukov\BlockchainContextBundle\Service\TxBuilder;
 
 use Amashukov\AbiEncoder\AbiEncoder;
+use Amashukov\BlockchainContextBundle\Service\Numeric\UuidIntCodec;
 use Amashukov\EthRpc\Numeric\HexBig;
 use Amashukov\EthRpc\Numeric\HexInt;
-use Amashukov\BlockchainContextBundle\Service\Numeric\UuidIntCodec;
 use InvalidArgumentException;
 
 final readonly class EthDepositTxBuilder implements DepositTxBuilderInterface
@@ -43,5 +43,17 @@ final readonly class EthDepositTxBuilder implements DepositTxBuilderInterface
             'value'   => HexBig::toHex($valueWei),
             'chainId' => HexInt::toHex($this->chainId),
         ]);
+    }
+
+    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+    {
+        $payload = $this->build($order, $context);
+
+        return new DepositTxStep(
+            kind: 'evm-deposit-native',
+            buttonLabel: sprintf('Send %s ETH', (string) $order->getFromAmount()),
+            tx: $payload->payload,
+            done: false,
+        );
     }
 }

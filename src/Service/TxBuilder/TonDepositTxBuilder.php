@@ -37,4 +37,16 @@ final readonly class TonDepositTxBuilder implements DepositTxBuilderInterface
             'payload' => Boc::encodeBase64($commentCell),
         ]);
     }
+
+    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+    {
+        $payload = $this->build($order, $context);
+
+        return new DepositTxStep(
+            kind: 'ton-deposit-native',
+            buttonLabel: sprintf('Send %s TON', (string) $order->getFromAmount()),
+            tx: $payload->payload,
+            done: false,
+        );
+    }
 }

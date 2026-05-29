@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Amashukov\BlockchainContextBundle\Service\TxBuilder;
 
 use Amashukov\BlockchainContextBundle\Service\Numeric\UsdtJettonDecimals;
-use Amashukov\TonWallet\Address;
 use Amashukov\TonCell\Boc;
 use Amashukov\TonCell\Builder;
+use Amashukov\TonWallet\Address;
 use InvalidArgumentException;
 
 final readonly class TonJettonDepositTxBuilder implements DepositTxBuilderInterface
@@ -63,5 +63,17 @@ final readonly class TonJettonDepositTxBuilder implements DepositTxBuilderInterf
             'amount'  => self::OUTER_GAS_NANO,
             'payload' => Boc::encodeBase64($body),
         ]);
+    }
+
+    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+    {
+        $payload = $this->build($order, $context);
+
+        return new DepositTxStep(
+            kind: 'ton-deposit-jetton',
+            buttonLabel: sprintf('Send %s USDT-Jetton', (string) $order->getFromAmount()),
+            tx: $payload->payload,
+            done: false,
+        );
     }
 }

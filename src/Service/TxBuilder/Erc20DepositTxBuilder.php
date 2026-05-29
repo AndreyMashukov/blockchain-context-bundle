@@ -67,4 +67,28 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
             ],
         ]);
     }
+
+
+    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+    {
+        $payload    = $this->build($order, $context);
+        $fromAmount = (string) $order->getFromAmount();
+        $approveTx  = $payload->payload['approve'] ?? null;
+
+        if (is_array($approveTx)) {
+            return new DepositTxStep(
+                kind: 'evm-approve',
+                buttonLabel: sprintf('Approve %s USDT spending', $fromAmount),
+                tx: $approveTx,
+                done: false,
+            );
+        }
+
+        return new DepositTxStep(
+            kind: 'evm-deposit-erc20',
+            buttonLabel: sprintf('Deposit %s USDT to bridge', $fromAmount),
+            tx: $payload->payload['deposit'] ?? null,
+            done: false,
+        );
+    }
 }
