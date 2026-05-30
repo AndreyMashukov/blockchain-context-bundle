@@ -8,6 +8,7 @@ use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxBuilderChain;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxBuilderInterface;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxPayload;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxStep;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -31,6 +32,11 @@ final class DepositTxBuilderChainTest extends TestCase
 
                 return new DepositTxPayload('ton-native', ['marker' => 'matched']);
             }
+
+            public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+            {
+                return DepositTxStep::done();
+            }
         };
         $tail = new class implements DepositTxBuilderInterface {
             public bool $consulted = false;
@@ -45,6 +51,11 @@ final class DepositTxBuilderChainTest extends TestCase
             public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
             {
                 return new DepositTxPayload('ton-native', ['marker' => 'tail']);
+            }
+
+            public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+            {
+                return DepositTxStep::done();
             }
         };
 
@@ -69,11 +80,16 @@ final class DepositTxBuilderChainTest extends TestCase
                 {
                     return new DepositTxPayload('evm-native', []);
                 }
+
+                public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+                {
+                    return DepositTxStep::done();
+                }
             },
         ]);
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('no builder supports chain "ton"');
+        $this->expectExceptionMessage('No DepositTxBuilder supports chain "ton"');
 
         $chain->build($this->orderView('ton'));
     }
@@ -105,6 +121,11 @@ final class DepositTxBuilderChainTest extends TestCase
                 $this->seenContext = $context;
 
                 return new DepositTxPayload('ton-jetton', []);
+            }
+
+            public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+            {
+                return DepositTxStep::done();
             }
         };
 

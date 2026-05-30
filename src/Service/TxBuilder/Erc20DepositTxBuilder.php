@@ -82,15 +82,24 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
             throw new InvalidArgumentException('Erc20DepositTxBuilder::nextStep requires context[userAddress] for allowance check.');
         }
 
+        if (!is_numeric($fromAmount)) {
+            throw new InvalidArgumentException(sprintf('Erc20DepositTxBuilder::nextStep: order.fromAmount must be numeric-string; got "%s".', $fromAmount));
+        }
+
         $bridge      = strtolower((string) $order->getDepositAddress());
         $token       = strtolower($this->usdtTokenAddress);
-        $amountUnits = bcmul((string) $fromAmount, '1000000', 0);
+        $amountUnits = bcmul($fromAmount, '1000000', 0);
+
+        /** @var array<string, mixed>|null $depositTx */
+        $depositTx = $payload->payload['deposit'] ?? null;
+        /** @var array<string, mixed>|null $approveTx */
+        $approveTx = $payload->payload['approve'] ?? null;
 
         if ($this->hasSufficientAllowance($token, $userAddress, $bridge, $amountUnits)) {
             return new DepositTxStep(
                 kind: 'evm-deposit-erc20',
                 buttonLabel: sprintf('Deposit %s USDT to bridge', $fromAmount),
-                tx: $payload->payload['deposit'] ?? null,
+                tx: $depositTx,
                 done: false,
             );
         }
@@ -98,7 +107,7 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
         return new DepositTxStep(
             kind: 'evm-approve',
             buttonLabel: sprintf('Approve %s USDT spending', $fromAmount),
-            tx: $payload->payload['approve'] ?? null,
+            tx: $approveTx,
             done: false,
         );
     }
@@ -125,11 +134,15 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
             return false;
         }
 
-        if (!is_string($result) || '' === $result || '0x' === $result) {
+        if ('' === $result || '0x' === $result) {
             return false;
         }
 
         $allowance = HexBig::fromHex($result);
+
+        if (!is_numeric($requiredUnits)) {
+            return false;
+        }
 
         return bccomp($allowance, $requiredUnits, 0) >= 0;
     }
