@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Amashukov\BlockchainContextBundle\Service\TxBuilder;
 
-use Amashukov\TonCell\Boc;
-use Amashukov\TonCell\Builder;
-use InvalidArgumentException;
-
 final readonly class TonDepositTxBuilder implements DepositTxBuilderInterface
 {
+    public function __construct(
+        private DepositEncoderInterface $encoder,
+    ) {}
+
     public function supports(string $chain): bool
     {
         return 'ton' === $chain;
@@ -17,35 +17,15 @@ final readonly class TonDepositTxBuilder implements DepositTxBuilderInterface
 
     public function build(DepositTxOrderView $order): DepositTxPayload
     {
-        $depositAddress = $order->getVault()->getAddress();
-        $fromAmount     = (string) $order->getFromAmount();
-        $memo           = (string) $order->getDepositMemo();
-
-        if (!is_numeric($fromAmount)) {
-            throw new InvalidArgumentException(sprintf('TonDepositTxBuilder: order.fromAmount must be numeric-string; got "%s".', $fromAmount));
-        }
-        $amountNano = bcmul($fromAmount, '1000000000', 0);
-
-        $commentCell = (new Builder())
-            ->storeUint(0, 32)
-            ->storeStringTail($memo)
-            ->endCell();
-
-        return new DepositTxPayload('ton-native', [
-            'address' => $depositAddress,
-            'amount'  => $amountNano,
-            'payload' => Boc::encodeBase64($commentCell),
-        ]);
+        return new DepositTxPayload('ton-native', $this->encoder->tonNativeDeposit($order, $order->getVault()->getAddress()));
     }
 
     public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep
     {
-        $payload = $this->build($order);
-
         return new DepositTxStep(
             kind: 'ton-deposit-native',
             buttonLabel: sprintf('Send %s TON', (string) $order->getFromAmount()),
-            tx: $payload->payload,
+            tx: $this->build($order)->payload,
             done: false,
         );
     }

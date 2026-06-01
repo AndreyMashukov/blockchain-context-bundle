@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Amashukov\BlockchainContextBundle\Tests\Service\TxBuilder;
 
-use Amashukov\AbiEncoder\AbiEncoder;
-use Amashukov\BlockchainContextBundle\Service\Numeric\UuidIntCodec;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositEncoderInterface;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\EthDepositTxBuilder;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\SignerInterface;
@@ -16,95 +15,69 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(EthDepositTxBuilder::class)]
 final class EthDepositTxBuilderTest extends TestCase
 {
-    private const string VAULT = '0xABCDEF0123456789aBcDeF0123456789AbCdEf01';
-
-    private const string UUID = 'f8a3b2c1-4d5e-6789-abcd-ef0123456789';
-
-    private const string UUID_HEX = 'f8a3b2c14d5e6789abcdef0123456789';
-
-    private function newBuilder(int $chainId): EthDepositTxBuilder
-    {
-        return new EthDepositTxBuilder(chainId: $chainId, uuidIntCodec: new UuidIntCodec());
-    }
+    private const array TX = ['to' => '0xvault', 'data' => '0xdeadbeef', 'value' => '0x1', 'chainId' => '0x1'];
 
     public function testSupportsEthOnly(): void
     {
-        $builder = $this->newBuilder(1);
+        $builder = new EthDepositTxBuilder($this->encoder());
         self::assertTrue($builder->supports('eth'));
         self::assertFalse($builder->supports('usdt_erc20'));
         self::assertFalse($builder->supports('ton'));
         self::assertFalse($builder->supports('usdt_jetton'));
     }
 
-    public function testBuildEmitsEthSendTransactionShapeTargetingVault(): void
+    public function testBuildDelegatesEvmNativeEncodingTargetingVault(): void
     {
-        $builder = $this->newBuilder(1);
-        $payload = $builder->build($this->order(self::UUID, '1.5'));
+        $encoder = $this->createMock(DepositEncoderInterface::class);
+        $encoder->expects(self::once())
+            ->method('evmNativeDeposit')
+            ->with(self::isInstanceOf(DepositTxOrderView::class), '0:vault')
+            ->willReturn(self::TX);
+
+        $payload = (new EthDepositTxBuilder($encoder))->build($this->order());
 
         self::assertSame('evm-native', $payload->kind);
-        self::assertSame(strtolower(self::VAULT), $this->field($payload->payload, 'to'));
-        self::assertSame('0x1', $this->field($payload->payload, 'chainId'));
-        self::assertSame('0x14d1120d7b160000', $this->field($payload->payload, 'value'));
+        self::assertSame(self::TX, $payload->payload);
     }
 
-    public function testBuildSelectorMatchesDepositForBridgeUint256(): void
+    public function testNextStepWrapsEncoderTxAsDepositNativeStep(): void
     {
-        $expectedSelector = '0x' . AbiEncoder::methodId('depositForBridge(uint256)');
+        $step = (new EthDepositTxBuilder($this->encoder()))->nextStep($this->order(), $this->signer());
 
-        $builder = $this->newBuilder(11155111);
-        $payload = $builder->build($this->order(self::UUID, '0.01'));
-
-        self::assertStringStartsWith($expectedSelector, $this->field($payload->payload, 'data'));
-        self::assertSame(10 + 64, \strlen($this->field($payload->payload, 'data')));
-        self::assertSame('0xaa36a7', $this->field($payload->payload, 'chainId'));
+        self::assertSame('evm-deposit-native', $step->kind);
+        self::assertSame(self::TX, $step->tx);
+        self::assertFalse($step->done);
     }
 
-    public function testBuildEncodesUuidAsUint256IntoCalldataTail(): void
+    private function encoder(): DepositEncoderInterface
     {
-        $builder = $this->newBuilder(1);
-        $payload = $builder->build($this->order(self::UUID, '0.01'));
+        $encoder = $this->createStub(DepositEncoderInterface::class);
+        $encoder->method('evmNativeDeposit')->willReturn(self::TX);
 
-        self::assertStringEndsWith(str_pad(self::UUID_HEX, 64, '0', \STR_PAD_LEFT), $this->field($payload->payload, 'data'));
+        return $encoder;
     }
 
-    public function testBuildHandlesSmallSubGweiValuesPrecisely(): void
+    private function signer(): SignerInterface
     {
-        $builder = $this->newBuilder(1);
-        $payload = $builder->build($this->order(self::UUID, '0.000000000000000001'));
-
-        self::assertSame('0x1', $this->field($payload->payload, 'value'));
-    }
-
-    public function testNextStepReturnsDepositNativeStepWithoutGas(): void
-    {
-        $builder = $this->newBuilder(1);
-        $signer  = new readonly class implements SignerInterface {
+        return new readonly class implements SignerInterface {
             public function getAddress(): string
             {
                 return '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
             }
         };
-        $step = $builder->nextStep($this->order(self::UUID, '1.5'), $signer);
-
-        self::assertSame('evm-deposit-native', $step->kind);
-        self::assertIsArray($step->tx);
-        self::assertArrayNotHasKey('gas', $step->tx);
     }
 
-    private function order(string $orderUuid, string $fromAmount): DepositTxOrderView
+    private function order(): DepositTxOrderView
     {
-        $vaultAddr = self::VAULT;
-        $vault     = new readonly class ($vaultAddr) implements VaultInterface {
-            public function __construct(private string $address) {}
-
+        $vault = new readonly class implements VaultInterface {
             public function getAddress(): string
             {
-                return $this->address;
+                return '0:vault';
             }
         };
 
-        return new readonly class ($orderUuid, $fromAmount, $vault, $vaultAddr) implements DepositTxOrderView {
-            public function __construct(private string $orderUuid, private string $fromAmount, private VaultInterface $vault, private string $vaultAddr) {}
+        return new readonly class ($vault) implements DepositTxOrderView {
+            public function __construct(private VaultInterface $vault) {}
 
             public function getId(): int
             {
@@ -113,7 +86,7 @@ final class EthDepositTxBuilderTest extends TestCase
 
             public function getOrderId(): string
             {
-                return $this->orderUuid;
+                return '00000000-0000-0000-0000-000000000001';
             }
 
             public function getFromChain(): string
@@ -121,14 +94,14 @@ final class EthDepositTxBuilderTest extends TestCase
                 return 'eth';
             }
 
-            public function getDepositAddress(): string
+            public function getDepositAddress(): ?string
             {
-                return $this->vaultAddr;
+                return null;
             }
 
             public function getFromAmount(): string
             {
-                return $this->fromAmount;
+                return '1.5';
             }
 
             public function getDepositMemo(): ?string
@@ -141,18 +114,5 @@ final class EthDepositTxBuilderTest extends TestCase
                 return $this->vault;
             }
         };
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function field(array $payload, string $key): string
-    {
-        $val = $payload[$key] ?? null;
-        if (!is_string($val)) {
-            self::fail(sprintf('payload[%s] is not a string', $key));
-        }
-
-        return $val;
     }
 }

@@ -103,16 +103,6 @@ services:
         arguments:
             $polls: '%blockchain_context.ton.finality_polls%'
 
-    # --- per-chain deposit-tx builders (scalar args from config params) ---
-    Amashukov\BlockchainContextBundle\Service\TxBuilder\EthDepositTxBuilder:
-        arguments:
-            $chainId: '%blockchain_context.eth.chain_id%'
-
-    Amashukov\BlockchainContextBundle\Service\TxBuilder\Erc20DepositTxBuilder:
-        arguments:
-            $usdtTokenAddress: '%blockchain_context.eth.usdt_token_address%'
-            $chainId: '%blockchain_context.eth.chain_id%'
-
     # --- tagged-iterator aggregator chains (members tagged via _instanceof above) ---
     Amashukov\BlockchainContextBundle\Service\Detection\ChainDepositCheckChain:
         arguments:

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Amashukov\BlockchainContextBundle\Tests\Service\TxBuilder;
 
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositEncoderInterface;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\SignerInterface;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\TonDepositTxBuilder;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\VaultInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -13,56 +15,68 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(TonDepositTxBuilder::class)]
 final class TonDepositTxBuilderTest extends TestCase
 {
+    private const array TX = ['address' => '0:vault', 'amount' => '1500000000', 'payload' => 'base64body'];
+
     public function testSupportsTonOnly(): void
     {
-        $builder = new TonDepositTxBuilder();
+        $builder = new TonDepositTxBuilder($this->encoder());
         self::assertTrue($builder->supports('ton'));
         self::assertFalse($builder->supports('usdt_jetton'));
         self::assertFalse($builder->supports('eth'));
         self::assertFalse($builder->supports('usdt_erc20'));
     }
 
-    public function testBuildEmitsTonConnectMessageShape(): void
+    public function testBuildDelegatesTonNativeEncodingTargetingVault(): void
     {
-        $builder = new TonDepositTxBuilder();
-        $payload = $builder->build($this->order('1.234567890', 'memo42'));
+        $encoder = $this->createMock(DepositEncoderInterface::class);
+        $encoder->expects(self::once())
+            ->method('tonNativeDeposit')
+            ->with(self::isInstanceOf(DepositTxOrderView::class), '0:vault')
+            ->willReturn(self::TX);
+
+        $payload = (new TonDepositTxBuilder($encoder))->build($this->order());
 
         self::assertSame('ton-native', $payload->kind);
-        self::assertSame('UQbridge_ton_contract_address_padded_to_48_chars0', $this->field($payload->payload, 'address'));
-        self::assertSame('1234567890', $this->field($payload->payload, 'amount'));
-        self::assertNotEmpty($this->field($payload->payload, 'payload'));
-        self::assertNotFalse(base64_decode($this->field($payload->payload, 'payload'), true));
+        self::assertSame(self::TX, $payload->payload);
     }
 
-    public function testBuildConvertsHumanAmountToNanotonsViaBcmath(): void
+    public function testNextStepWrapsEncoderTxAsDepositNativeStep(): void
     {
-        $builder = new TonDepositTxBuilder();
-        $payload = $builder->build($this->order('0.5', 'memo1'));
+        $step = (new TonDepositTxBuilder($this->encoder()))->nextStep($this->order(), $this->signer());
 
-        self::assertSame('500000000', $this->field($payload->payload, 'amount'));
+        self::assertSame('ton-deposit-native', $step->kind);
+        self::assertSame(self::TX, $step->tx);
     }
 
-    public function testBuildHandlesIntegerAmountWithoutFractionalDigits(): void
+    private function encoder(): DepositEncoderInterface
     {
-        $builder = new TonDepositTxBuilder();
-        $payload = $builder->build($this->order('10', 'memo7'));
+        $encoder = $this->createStub(DepositEncoderInterface::class);
+        $encoder->method('tonNativeDeposit')->willReturn(self::TX);
 
-        self::assertSame('10000000000', $this->field($payload->payload, 'amount'));
+        return $encoder;
     }
 
-    public function testBuildPayloadCellChangesWhenMemoChanges(): void
+    private function signer(): SignerInterface
     {
-        $builder  = new TonDepositTxBuilder();
-        $payloadA = $builder->build($this->order('1.0', 'memo1'));
-        $payloadB = $builder->build($this->order('1.0', 'memo2'));
-
-        self::assertNotSame($this->field($payloadA->payload, 'payload'), $this->field($payloadB->payload, 'payload'));
+        return new readonly class implements SignerInterface {
+            public function getAddress(): string
+            {
+                return '0:signer';
+            }
+        };
     }
 
-    private function order(string $fromAmount, string $memo): DepositTxOrderView
+    private function order(): DepositTxOrderView
     {
-        return new readonly class ($fromAmount, $memo) implements DepositTxOrderView {
-            public function __construct(private string $fromAmount, private string $memo) {}
+        $vault = new readonly class implements VaultInterface {
+            public function getAddress(): string
+            {
+                return '0:vault';
+            }
+        };
+
+        return new readonly class ($vault) implements DepositTxOrderView {
+            public function __construct(private VaultInterface $vault) {}
 
             public function getId(): int
             {
@@ -79,43 +93,25 @@ final class TonDepositTxBuilderTest extends TestCase
                 return 'ton';
             }
 
-            public function getDepositAddress(): string
+            public function getDepositAddress(): ?string
             {
-                return 'UQbridge_ton_contract_address_padded_to_48_chars0';
-            }
-
-            public function getVault(): VaultInterface
-            {
-                return new readonly class implements VaultInterface {
-                    public function getAddress(): string
-                    {
-                        return 'UQbridge_ton_contract_address_padded_to_48_chars0';
-                    }
-                };
+                return null;
             }
 
             public function getFromAmount(): string
             {
-                return $this->fromAmount;
+                return '1.5';
             }
 
             public function getDepositMemo(): string
             {
-                return $this->memo;
+                return 'memo42';
+            }
+
+            public function getVault(): VaultInterface
+            {
+                return $this->vault;
             }
         };
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function field(array $payload, string $key): string
-    {
-        $val = $payload[$key] ?? null;
-        if (!is_string($val)) {
-            self::fail(sprintf('payload[%s] is not a string', $key));
-        }
-
-        return $val;
     }
 }
