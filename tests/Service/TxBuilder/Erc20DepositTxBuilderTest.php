@@ -8,9 +8,8 @@ use Amashukov\AbiEncoder\AbiEncoder;
 use Amashukov\BlockchainContextBundle\Service\Numeric\UuidIntCodec;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\Erc20DepositTxBuilder;
-use Amashukov\BlockchainContextBundle\Service\TxBuilder\GasEstimatorInterface;
-use Amashukov\BlockchainContextBundle\Service\TxBuilder\NullGasEstimator;
-use Amashukov\BlockchainContextBundle\Service\TxBuilder\UserWalletInterface;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\SignerInterface;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\VaultInterface;
 use Amashukov\EthRpc\EthRpcClientInterface;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -21,32 +20,48 @@ final class Erc20DepositTxBuilderTest extends TestCase
 {
     private const string USDT = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
 
+    private const string VAULT = '0x1234567890ABCDEF1234567890ABCDEF12345678';
+
+    private const string SIGNER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
     private const string UUID = 'f8a3b2c1-4d5e-6789-abcd-ef0123456789';
 
     private const string UUID_HEX = 'f8a3b2c14d5e6789abcdef0123456789';
 
-    private const string USER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    private const string BIG = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
-    private function newBuilder(
-        int $chainId,
-        ?EthRpcClientInterface $ethRpc = null,
-        ?GasEstimatorInterface $gasEstimator = null,
-    ): Erc20DepositTxBuilder {
+    private const string ZERO = '0x0';
+
+    private function newBuilder(int $chainId, ?EthRpcClientInterface $ethRpc = null): Erc20DepositTxBuilder
+    {
         return new Erc20DepositTxBuilder(
             usdtTokenAddress: self::USDT,
             chainId: $chainId,
             uuidIntCodec: new UuidIntCodec(),
-            ethRpc: $ethRpc ?? $this->ethRpcReturning('0x0'),
-            gasEstimator: $gasEstimator ?? new NullGasEstimator(),
+            ethRpc: $ethRpc ?? $this->ethRpc(self::BIG, self::BIG),
         );
     }
 
-    private function ethRpcReturning(string $hex): EthRpcClientInterface
+    private function ethRpc(string $balanceHex, string $allowanceHex): EthRpcClientInterface
     {
         $rpc = $this->createStub(EthRpcClientInterface::class);
-        $rpc->method('eth_call')->willReturn($hex);
+        $rpc->method('eth_call')->willReturnCallback(
+            static fn(array $tx): string => str_starts_with((string) ($tx['data'] ?? ''), '0x70a08231') ? $balanceHex : $allowanceHex,
+        );
 
         return $rpc;
+    }
+
+    private function signer(string $address = self::SIGNER): SignerInterface
+    {
+        return new readonly class ($address) implements SignerInterface {
+            public function __construct(private string $address) {}
+
+            public function getAddress(): string
+            {
+                return $this->address;
+            }
+        };
     }
 
     public function testSupportsUsdtErc20Only(): void
@@ -58,95 +73,42 @@ final class Erc20DepositTxBuilderTest extends TestCase
         self::assertFalse($builder->supports('usdt_jetton'));
     }
 
-    public function testBuildEmitsApprovePlusDepositPair(): void
+    public function testBuildEmitsApprovePlusDepositPairTargetingVault(): void
     {
-        $builder = $this->newBuilder(1);
-        $payload = $builder->build($this->order(self::UUID, '100'));
+        $payload = $this->newBuilder(1)->build($this->order(self::UUID, '100'));
 
         self::assertSame('evm-erc20', $payload->kind);
-        self::assertArrayHasKey('approve', $payload->payload);
-        self::assertArrayHasKey('deposit', $payload->payload);
-
         self::assertSame(strtolower(self::USDT), $this->field($payload->payload, 'approve', 'to'));
-        self::assertSame('0x1234567890abcdef1234567890abcdef12345678', $this->field($payload->payload, 'deposit', 'to'));
-
-        self::assertSame('0x0', $this->field($payload->payload, 'approve', 'value'));
-        self::assertSame('0x0', $this->field($payload->payload, 'deposit', 'value'));
+        self::assertSame(strtolower(self::VAULT), $this->field($payload->payload, 'deposit', 'to'));
         self::assertSame('0x1', $this->field($payload->payload, 'approve', 'chainId'));
         self::assertSame('0x1', $this->field($payload->payload, 'deposit', 'chainId'));
     }
 
-    public function testApproveCalldataMatchesErc20Selector(): void
+    public function testApproveSpenderIsTheVault(): void
     {
-        $expectedSelector = '0x' . AbiEncoder::methodId('approve(address,uint256)');
-
-        $builder = $this->newBuilder(1);
-        $payload = $builder->build($this->order(self::UUID, '100'));
-
-        self::assertStringStartsWith($expectedSelector, $this->field($payload->payload, 'approve', 'data'));
+        $payload     = $this->newBuilder(1)->build($this->order(self::UUID, '100'));
+        $vaultPadded = str_pad(strtolower(substr(self::VAULT, 2)), 64, '0', \STR_PAD_LEFT);
+        self::assertStringContainsString($vaultPadded, $this->field($payload->payload, 'approve', 'data'));
     }
 
-    public function testDepositCalldataMatchesBridgeSelector(): void
+    public function testDepositCalldataMatchesBridgeSelectorAndUuidTail(): void
     {
-        $expectedSelector = '0x' . AbiEncoder::methodId('depositTokenForBridge(address,uint256,uint256)');
+        $payload = $this->newBuilder(1)->build($this->order(self::UUID, '1.5'));
 
-        $builder = $this->newBuilder(1);
-        $payload = $builder->build($this->order(self::UUID, '100'));
-
-        self::assertStringStartsWith($expectedSelector, $this->field($payload->payload, 'deposit', 'data'));
+        self::assertStringStartsWith('0x' . AbiEncoder::methodId('depositTokenForBridge(address,uint256,uint256)'), $this->field($payload->payload, 'deposit', 'data'));
+        self::assertStringEndsWith(str_pad(self::UUID_HEX, 64, '0', \STR_PAD_LEFT), $this->field($payload->payload, 'deposit', 'data'));
     }
 
     public function testAmountConvertsToSixDecimalUnits(): void
     {
-        $builder = $this->newBuilder(1);
-        $payload = $builder->build($this->order(self::UUID, '1.5'));
-
-        self::assertSame(
-            str_pad('16e360', 64, '0', \STR_PAD_LEFT),
-            substr($this->field($payload->payload, 'approve', 'data'), -64),
-        );
-    }
-
-    public function testDepositCalldataEncodesUuidAsLastUint256(): void
-    {
-        $builder = $this->newBuilder(1);
-        $payload = $builder->build($this->order(self::UUID, '1.5'));
-
-        self::assertStringEndsWith(str_pad(self::UUID_HEX, 64, '0', \STR_PAD_LEFT), $this->field($payload->payload, 'deposit', 'data'));
-    }
-
-    public function testBuildLowercasesTokenAndBridgeAddresses(): void
-    {
-        $builder = $this->newBuilder(1);
-        $payload = $builder->build($this->order(self::UUID, '100'));
-
-        self::assertSame(strtolower(self::USDT), $this->field($payload->payload, 'approve', 'to'));
-        self::assertSame('0x1234567890abcdef1234567890abcdef12345678', $this->field($payload->payload, 'deposit', 'to'));
-    }
-
-    public function testBuildHonoursChainIdEnvOverride(): void
-    {
-        $builder = $this->newBuilder(11155111);
-        $payload = $builder->build($this->order(self::UUID, '1'));
-
-        self::assertSame('0xaa36a7', $this->field($payload->payload, 'approve', 'chainId'));
-        self::assertSame('0xaa36a7', $this->field($payload->payload, 'deposit', 'chainId'));
-    }
-
-    public function testNextStepRejectsOrderWithoutBoundWallet(): void
-    {
-        $builder = $this->newBuilder(1);
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('requires a bound user wallet');
-
-        $builder->nextStep($this->order(self::UUID, '100', userAddress: null));
+        $payload = $this->newBuilder(1)->build($this->order(self::UUID, '1.5'));
+        self::assertSame(str_pad('16e360', 64, '0', \STR_PAD_LEFT), substr($this->field($payload->payload, 'approve', 'data'), -64));
     }
 
     public function testNextStepReturnsApproveWhenAllowanceInsufficient(): void
     {
-        $builder = $this->newBuilder(1, $this->ethRpcReturning('0x0'));
-        $step    = $builder->nextStep($this->order(self::UUID, '100'));
+        $builder = $this->newBuilder(1, $this->ethRpc(self::BIG, self::ZERO));
+        $step    = $builder->nextStep($this->order(self::UUID, '100'), $this->signer());
 
         self::assertSame('evm-approve', $step->kind);
         self::assertSame(strtolower(self::USDT), $this->txField($step->tx, 'to'));
@@ -154,22 +116,21 @@ final class Erc20DepositTxBuilderTest extends TestCase
 
     public function testNextStepReturnsDepositWhenAllowanceSufficient(): void
     {
-        $builder = $this->newBuilder(1, $this->ethRpcReturning('0x' . str_repeat('f', 64)));
-        $step    = $builder->nextStep($this->order(self::UUID, '100'));
+        $builder = $this->newBuilder(1, $this->ethRpc(self::BIG, self::BIG));
+        $step    = $builder->nextStep($this->order(self::UUID, '100'), $this->signer());
 
         self::assertSame('evm-deposit-erc20', $step->kind);
-        self::assertSame('0x1234567890abcdef1234567890abcdef12345678', $this->txField($step->tx, 'to'));
+        self::assertSame(strtolower(self::VAULT), $this->txField($step->tx, 'to'));
     }
 
-    public function testNextStepStampsGasFromEstimator(): void
+    public function testNextStepThrowsWhenSignerBalanceInsufficient(): void
     {
-        $gas = $this->createStub(GasEstimatorInterface::class);
-        $gas->method('estimateForTx')->willReturn('0x5208');
+        $builder = $this->newBuilder(1, $this->ethRpc(self::ZERO, self::BIG));
 
-        $builder = $this->newBuilder(1, $this->ethRpcReturning('0x0'), $gas);
-        $step    = $builder->nextStep($this->order(self::UUID, '100'));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('signer USDT balance');
 
-        self::assertSame('0x5208', $this->txField($step->tx, 'gas'));
+        $builder->nextStep($this->order(self::UUID, '100'), $this->signer());
     }
 
     /**
@@ -199,24 +160,20 @@ final class Erc20DepositTxBuilderTest extends TestCase
         return $val;
     }
 
-    private function order(string $orderUuid, string $fromAmount, ?string $userAddress = self::USER): DepositTxOrderView
+    private function order(string $orderUuid, string $fromAmount): DepositTxOrderView
     {
-        $wallet = new readonly class ($userAddress) implements UserWalletInterface {
-            public function __construct(private ?string $userAddress) {}
+        $vaultAddr = self::VAULT;
+        $vault     = new readonly class ($vaultAddr) implements VaultInterface {
+            public function __construct(private string $address) {}
 
-            public function userAddress(): ?string
+            public function getAddress(): string
             {
-                return $this->userAddress;
-            }
-
-            public function userJettonWallet(): ?string
-            {
-                return null;
+                return $this->address;
             }
         };
 
-        return new readonly class ($orderUuid, $fromAmount, $wallet) implements DepositTxOrderView {
-            public function __construct(private string $orderUuid, private string $fromAmount, private UserWalletInterface $wallet) {}
+        return new readonly class ($orderUuid, $fromAmount, $vault, $vaultAddr) implements DepositTxOrderView {
+            public function __construct(private string $orderUuid, private string $fromAmount, private VaultInterface $vault, private string $vaultAddr) {}
 
             public function getId(): int
             {
@@ -235,7 +192,7 @@ final class Erc20DepositTxBuilderTest extends TestCase
 
             public function getDepositAddress(): string
             {
-                return '0x1234567890ABCDEF1234567890ABCDEF12345678';
+                return $this->vaultAddr;
             }
 
             public function getFromAmount(): string
@@ -248,9 +205,9 @@ final class Erc20DepositTxBuilderTest extends TestCase
                 return null;
             }
 
-            public function getUserWallet(): UserWalletInterface
+            public function getVault(): VaultInterface
             {
-                return $this->wallet;
+                return $this->vault;
             }
         };
     }

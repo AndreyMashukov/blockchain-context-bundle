@@ -113,10 +113,6 @@ services:
             $usdtTokenAddress: '%blockchain_context.eth.usdt_token_address%'
             $chainId: '%blockchain_context.eth.chain_id%'
 
-    Amashukov\BlockchainContextBundle\Service\TxBuilder\TonJettonDepositTxBuilder:
-        arguments:
-            $bridgeContractAddress: '%blockchain_context.ton.bridge_contract%'
-
     # --- tagged-iterator aggregator chains (members tagged via _instanceof above) ---
     Amashukov\BlockchainContextBundle\Service\Detection\ChainDepositCheckChain:
         arguments:
@@ -135,7 +131,6 @@ services:
             $builders: !tagged_iterator 'blockchain_context.deposit_tx_builder'
 
     # --- domain interface → impl aliases ---
-    Amashukov\BlockchainContextBundle\Service\TxBuilder\GasEstimatorInterface: '@Amashukov\BlockchainContextBundle\Service\TxBuilder\NullGasEstimator'
     Amashukov\BlockchainContextBundle\Service\SignatureVerifierInterface: '@Amashukov\BlockchainContextBundle\Service\SignatureVerifier'
     Amashukov\BlockchainContextBundle\Service\Gas\EthGasFetcherInterface: '@Amashukov\BlockchainContextBundle\Service\Gas\EthGasFetcher'
     Amashukov\BlockchainContextBundle\Service\Gas\TonGasFetcherInterface: '@Amashukov\BlockchainContextBundle\Service\Gas\TonGasFetcher'

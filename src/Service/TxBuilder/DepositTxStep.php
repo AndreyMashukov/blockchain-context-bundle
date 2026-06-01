@@ -7,8 +7,8 @@ namespace Amashukov\BlockchainContextBundle\Service\TxBuilder;
 final readonly class DepositTxStep
 {
     /**
-     * @param 'evm-approve'|'evm-deposit-native'|'evm-deposit-erc20'|'ton-deposit-native'|'ton-deposit-jetton'|'done' $kind
-     * @param array<string, mixed>|null                                                                              $tx   EVM: {to, data, value, chainId}; TON: {address, amount, payload}; null when done
+     * @param 'evm-native'|'evm-erc20'|'evm-approve'|'evm-deposit-native'|'evm-deposit-erc20'|'ton-deposit-native'|'ton-deposit-jetton'|'done' $kind
+     * @param array<string, mixed>|null                                                                                         $tx   EVM native: {to, data, value, chainId}; EVM erc20: {approve, deposit}; TON: {address, amount, payload}; null when done
      */
     public function __construct(
         public string $kind,

@@ -8,26 +8,23 @@ use Amashukov\AbiEncoder\AbiEncoder;
 use Amashukov\BlockchainContextBundle\Service\Numeric\UuidIntCodec;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\EthDepositTxBuilder;
-use Amashukov\BlockchainContextBundle\Service\TxBuilder\GasEstimatorInterface;
-use Amashukov\BlockchainContextBundle\Service\TxBuilder\NullGasEstimator;
-use Amashukov\BlockchainContextBundle\Service\TxBuilder\UserWalletInterface;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\SignerInterface;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\VaultInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(EthDepositTxBuilder::class)]
 final class EthDepositTxBuilderTest extends TestCase
 {
+    private const string VAULT = '0xABCDEF0123456789aBcDeF0123456789AbCdEf01';
+
     private const string UUID = 'f8a3b2c1-4d5e-6789-abcd-ef0123456789';
 
     private const string UUID_HEX = 'f8a3b2c14d5e6789abcdef0123456789';
 
-    private function newBuilder(int $chainId, ?GasEstimatorInterface $gasEstimator = null): EthDepositTxBuilder
+    private function newBuilder(int $chainId): EthDepositTxBuilder
     {
-        return new EthDepositTxBuilder(
-            chainId: $chainId,
-            uuidIntCodec: new UuidIntCodec(),
-            gasEstimator: $gasEstimator ?? new NullGasEstimator(),
-        );
+        return new EthDepositTxBuilder(chainId: $chainId, uuidIntCodec: new UuidIntCodec());
     }
 
     public function testSupportsEthOnly(): void
@@ -39,13 +36,13 @@ final class EthDepositTxBuilderTest extends TestCase
         self::assertFalse($builder->supports('usdt_jetton'));
     }
 
-    public function testBuildEmitsEthSendTransactionShape(): void
+    public function testBuildEmitsEthSendTransactionShapeTargetingVault(): void
     {
         $builder = $this->newBuilder(1);
         $payload = $builder->build($this->order(self::UUID, '1.5'));
 
         self::assertSame('evm-native', $payload->kind);
-        self::assertSame('0xabcdef0123456789abcdef0123456789abcdef01', $this->field($payload->payload, 'to'));
+        self::assertSame(strtolower(self::VAULT), $this->field($payload->payload, 'to'));
         self::assertSame('0x1', $this->field($payload->payload, 'chainId'));
         self::assertSame('0x14d1120d7b160000', $this->field($payload->payload, 'value'));
     }
@@ -78,57 +75,36 @@ final class EthDepositTxBuilderTest extends TestCase
         self::assertSame('0x1', $this->field($payload->payload, 'value'));
     }
 
-    public function testBuildEncodingChangesWhenUuidChanges(): void
+    public function testNextStepReturnsDepositNativeStepWithoutGas(): void
     {
-        $builder  = $this->newBuilder(1);
-        $payloadA = $builder->build($this->order('11111111-1111-1111-1111-111111111111', '0.01'));
-        $payloadB = $builder->build($this->order('22222222-2222-2222-2222-222222222222', '0.01'));
-
-        self::assertNotSame($this->field($payloadA->payload, 'data'), $this->field($payloadB->payload, 'data'));
-    }
-
-    public function testNextStepStampsGasFromEstimatorWhenWalletBound(): void
-    {
-        $gas = $this->createStub(GasEstimatorInterface::class);
-        $gas->method('estimateForTx')->willReturn('0x5208');
-
-        $builder = $this->newBuilder(1, $gas);
-        $step    = $builder->nextStep($this->order(self::UUID, '1.5'));
+        $builder = $this->newBuilder(1);
+        $signer  = new readonly class implements SignerInterface {
+            public function getAddress(): string
+            {
+                return '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+            }
+        };
+        $step = $builder->nextStep($this->order(self::UUID, '1.5'), $signer);
 
         self::assertSame('evm-deposit-native', $step->kind);
-        self::assertSame('0x5208', $this->field($step->tx ?? [], 'gas'));
+        self::assertIsArray($step->tx);
+        self::assertArrayNotHasKey('gas', $step->tx);
     }
 
-    public function testNextStepSkipsGasWhenNoBoundWallet(): void
+    private function order(string $orderUuid, string $fromAmount): DepositTxOrderView
     {
-        $gas = $this->createStub(GasEstimatorInterface::class);
-        $gas->method('estimateForTx')->willReturn('0x5208');
+        $vaultAddr = self::VAULT;
+        $vault     = new readonly class ($vaultAddr) implements VaultInterface {
+            public function __construct(private string $address) {}
 
-        $builder = $this->newBuilder(1, $gas);
-        $order   = $this->order(self::UUID, '1.5', userAddress: null);
-        $step    = $builder->nextStep($order);
-
-        self::assertSame($builder->build($order)->payload, $step->tx);
-    }
-
-    private function order(string $orderUuid, string $fromAmount, ?string $userAddress = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'): DepositTxOrderView
-    {
-        $wallet = new readonly class ($userAddress) implements UserWalletInterface {
-            public function __construct(private ?string $userAddress) {}
-
-            public function userAddress(): ?string
+            public function getAddress(): string
             {
-                return $this->userAddress;
-            }
-
-            public function userJettonWallet(): ?string
-            {
-                return null;
+                return $this->address;
             }
         };
 
-        return new readonly class ($orderUuid, $fromAmount, $wallet) implements DepositTxOrderView {
-            public function __construct(private string $orderUuid, private string $fromAmount, private UserWalletInterface $wallet) {}
+        return new readonly class ($orderUuid, $fromAmount, $vault, $vaultAddr) implements DepositTxOrderView {
+            public function __construct(private string $orderUuid, private string $fromAmount, private VaultInterface $vault, private string $vaultAddr) {}
 
             public function getId(): int
             {
@@ -147,7 +123,7 @@ final class EthDepositTxBuilderTest extends TestCase
 
             public function getDepositAddress(): string
             {
-                return '0xABCDEF0123456789aBcDeF0123456789AbCdEf01';
+                return $this->vaultAddr;
             }
 
             public function getFromAmount(): string
@@ -160,9 +136,9 @@ final class EthDepositTxBuilderTest extends TestCase
                 return null;
             }
 
-            public function getUserWallet(): UserWalletInterface
+            public function getVault(): VaultInterface
             {
-                return $this->wallet;
+                return $this->vault;
             }
         };
     }

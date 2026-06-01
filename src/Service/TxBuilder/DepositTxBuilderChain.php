@@ -28,12 +28,12 @@ final readonly class DepositTxBuilderChain
         throw new LogicException(sprintf('No DepositTxBuilder supports chain "%s"', $chain));
     }
 
-    public function nextStep(DepositTxOrderView $order): DepositTxStep
+    public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep
     {
         $chain = (string) $order->getFromChain();
         foreach ($this->builders as $builder) {
             if ($builder->supports($chain)) {
-                return $builder->nextStep($order);
+                return $builder->nextStep($order, $signer);
             }
         }
         throw new LogicException(sprintf('No DepositTxBuilder supports chain "%s"', $chain));

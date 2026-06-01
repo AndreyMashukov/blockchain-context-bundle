@@ -10,5 +10,5 @@ interface DepositTxBuilderInterface
 
     public function build(DepositTxOrderView $order): DepositTxPayload;
 
-    public function nextStep(DepositTxOrderView $order): DepositTxStep;
+    public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep;
 }

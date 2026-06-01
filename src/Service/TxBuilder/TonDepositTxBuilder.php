@@ -17,7 +17,7 @@ final readonly class TonDepositTxBuilder implements DepositTxBuilderInterface
 
     public function build(DepositTxOrderView $order): DepositTxPayload
     {
-        $depositAddress = (string) $order->getDepositAddress();
+        $depositAddress = $order->getVault()->getAddress();
         $fromAmount     = (string) $order->getFromAmount();
         $memo           = (string) $order->getDepositMemo();
 
@@ -38,7 +38,7 @@ final readonly class TonDepositTxBuilder implements DepositTxBuilderInterface
         ]);
     }
 
-    public function nextStep(DepositTxOrderView $order): DepositTxStep
+    public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep
     {
         $payload = $this->build($order);
 

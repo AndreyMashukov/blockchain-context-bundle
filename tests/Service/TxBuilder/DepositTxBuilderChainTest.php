@@ -9,7 +9,8 @@ use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxBuilderInterfac
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxPayload;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxStep;
-use Amashukov\BlockchainContextBundle\Service\TxBuilder\UserWalletInterface;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\SignerInterface;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\VaultInterface;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -34,7 +35,7 @@ final class DepositTxBuilderChainTest extends TestCase
                 return new DepositTxPayload('ton-native', ['marker' => 'matched']);
             }
 
-            public function nextStep(DepositTxOrderView $order): DepositTxStep
+            public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep
             {
                 return DepositTxStep::done();
             }
@@ -54,7 +55,7 @@ final class DepositTxBuilderChainTest extends TestCase
                 return new DepositTxPayload('ton-native', ['marker' => 'tail']);
             }
 
-            public function nextStep(DepositTxOrderView $order): DepositTxStep
+            public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep
             {
                 return DepositTxStep::done();
             }
@@ -82,7 +83,7 @@ final class DepositTxBuilderChainTest extends TestCase
                     return new DepositTxPayload('evm-native', []);
                 }
 
-                public function nextStep(DepositTxOrderView $order): DepositTxStep
+                public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep
                 {
                     return DepositTxStep::done();
                 }
@@ -107,9 +108,7 @@ final class DepositTxBuilderChainTest extends TestCase
     public function testOrderIsForwardedToMatchingBuilder(): void
     {
         $matched = new class implements DepositTxBuilderInterface {
-            public ?string $seenUserAddress = null;
-
-            public ?string $seenJettonWallet = null;
+            public ?string $seenVault = null;
 
             public function supports(string $chain): bool
             {
@@ -118,13 +117,12 @@ final class DepositTxBuilderChainTest extends TestCase
 
             public function build(DepositTxOrderView $order): DepositTxPayload
             {
-                $this->seenUserAddress  = $order->getUserWallet()?->userAddress();
-                $this->seenJettonWallet = $order->getUserWallet()?->userJettonWallet();
+                $this->seenVault = $order->getVault()->getAddress();
 
                 return new DepositTxPayload('ton-jetton', []);
             }
 
-            public function nextStep(DepositTxOrderView $order): DepositTxStep
+            public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep
             {
                 return DepositTxStep::done();
             }
@@ -133,26 +131,20 @@ final class DepositTxBuilderChainTest extends TestCase
         $chain = new DepositTxBuilderChain([$matched]);
         $chain->build($this->orderView('usdt_jetton'));
 
-        self::assertSame('UQuser_address', $matched->seenUserAddress);
-        self::assertSame('EQuser_jetton_wallet', $matched->seenJettonWallet);
+        self::assertSame('0:vault_bridge_contract', $matched->seenVault);
     }
 
     private function orderView(string $chain): DepositTxOrderView
     {
-        $wallet = new readonly class implements UserWalletInterface {
-            public function userAddress(): string
+        $vault = new readonly class implements VaultInterface {
+            public function getAddress(): string
             {
-                return 'UQuser_address';
-            }
-
-            public function userJettonWallet(): string
-            {
-                return 'EQuser_jetton_wallet';
+                return '0:vault_bridge_contract';
             }
         };
 
-        return new readonly class ($chain, $wallet) implements DepositTxOrderView {
-            public function __construct(private string $chain, private UserWalletInterface $wallet) {}
+        return new readonly class ($chain, $vault) implements DepositTxOrderView {
+            public function __construct(private string $chain, private VaultInterface $vault) {}
 
             public function getId(): int
             {
@@ -184,9 +176,9 @@ final class DepositTxBuilderChainTest extends TestCase
                 return 'memo42';
             }
 
-            public function getUserWallet(): UserWalletInterface
+            public function getVault(): VaultInterface
             {
-                return $this->wallet;
+                return $this->vault;
             }
         };
     }

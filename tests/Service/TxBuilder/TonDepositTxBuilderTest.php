@@ -6,7 +6,7 @@ namespace Amashukov\BlockchainContextBundle\Tests\Service\TxBuilder;
 
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\TonDepositTxBuilder;
-use Amashukov\BlockchainContextBundle\Service\TxBuilder\UserWalletInterface;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\VaultInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -84,6 +84,16 @@ final class TonDepositTxBuilderTest extends TestCase
                 return 'UQbridge_ton_contract_address_padded_to_48_chars0';
             }
 
+            public function getVault(): VaultInterface
+            {
+                return new readonly class implements VaultInterface {
+                    public function getAddress(): string
+                    {
+                        return 'UQbridge_ton_contract_address_padded_to_48_chars0';
+                    }
+                };
+            }
+
             public function getFromAmount(): string
             {
                 return $this->fromAmount;
@@ -92,11 +102,6 @@ final class TonDepositTxBuilderTest extends TestCase
             public function getDepositMemo(): string
             {
                 return $this->memo;
-            }
-
-            public function getUserWallet(): ?UserWalletInterface
-            {
-                return null;
             }
         };
     }

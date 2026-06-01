@@ -18,5 +18,5 @@ interface DepositTxOrderView
 
     public function getDepositMemo(): ?string;
 
-    public function getUserWallet(): ?UserWalletInterface;
+    public function getVault(): VaultInterface;
 }

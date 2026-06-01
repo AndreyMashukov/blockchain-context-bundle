@@ -8,17 +8,12 @@ use Amashukov\BlockchainContextBundle\Service\Numeric\UsdtJettonDecimals;
 use Amashukov\TonCell\Boc;
 use Amashukov\TonCell\Builder;
 use Amashukov\TonWallet\Address;
-use InvalidArgumentException;
 
 final readonly class TonJettonDepositTxBuilder implements DepositTxBuilderInterface
 {
     private const string OUTER_GAS_NANO = '100000000';
 
     private const int FORWARD_TON_AMOUNT_NANO = 50000000;
-
-    public function __construct(
-        private string $bridgeContractAddress,
-    ) {}
 
     public function supports(string $chain): bool
     {
@@ -27,17 +22,7 @@ final readonly class TonJettonDepositTxBuilder implements DepositTxBuilderInterf
 
     public function build(DepositTxOrderView $order): DepositTxPayload
     {
-        $wallet           = $order->getUserWallet();
-        $userAddress      = $wallet?->userAddress();
-        $userJettonWallet = $wallet?->userJettonWallet();
-
-        if (null === $userAddress || '' === $userAddress || null === $userJettonWallet || '' === $userJettonWallet) {
-            throw new InvalidArgumentException('TonJettonDepositTxBuilder: bound owner + jetton wallet are required for USDT-Jetton deposits.');
-        }
-        if ('' === $this->bridgeContractAddress) {
-            throw new InvalidArgumentException('TonJettonDepositTxBuilder: BRIDGE_TON_CONTRACT env not configured.');
-        }
-
+        $vault       = $order->getVault()->getAddress();
         $fromAmount  = (string) $order->getFromAmount();
         $amountUnits = UsdtJettonDecimals::toAtomic($fromAmount);
         $memo        = (string) $order->getDepositMemo();
@@ -51,8 +36,8 @@ final readonly class TonJettonDepositTxBuilder implements DepositTxBuilderInterf
             ->storeUint(0x0F8A7EA5, 32)
             ->storeUint(0, 64)
             ->storeCoins($amountUnits)
-            ->storeAddress(Address::parse($this->bridgeContractAddress)->toCellData())
-            ->storeAddress(Address::parse($userAddress)->toCellData())
+            ->storeAddress(Address::parse($vault)->toCellData())
+            ->storeAddress(Address::parse($vault)->toCellData())
             ->storeBit(0)
             ->storeCoins(self::FORWARD_TON_AMOUNT_NANO)
             ->storeBit(1)
@@ -60,13 +45,13 @@ final readonly class TonJettonDepositTxBuilder implements DepositTxBuilderInterf
             ->endCell();
 
         return new DepositTxPayload('ton-jetton', [
-            'address' => $userJettonWallet,
+            'address' => $vault,
             'amount'  => self::OUTER_GAS_NANO,
             'payload' => Boc::encodeBase64($body),
         ]);
     }
 
-    public function nextStep(DepositTxOrderView $order): DepositTxStep
+    public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep
     {
         $payload = $this->build($order);
 

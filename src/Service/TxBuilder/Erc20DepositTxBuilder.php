@@ -19,7 +19,6 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
         private int $chainId,
         private UuidIntCodec $uuidIntCodec,
         private EthRpcClientInterface $ethRpc,
-        private GasEstimatorInterface $gasEstimator,
     ) {}
 
     public function supports(string $chain): bool
@@ -29,35 +28,34 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
 
     public function build(DepositTxOrderView $order): DepositTxPayload
     {
-        $bridge      = strtolower((string) $order->getDepositAddress());
+        $vault       = strtolower($order->getVault()->getAddress());
         $token       = strtolower($this->usdtTokenAddress);
         $orderId     = $this->uuidIntCodec->encode((string) $order->getOrderId());
         $amountUnits = $this->amountUnits($order);
 
         return new DepositTxPayload('evm-erc20', [
-            'approve' => $this->approveTx($token, $bridge, $amountUnits),
-            'deposit' => $this->depositTx($token, $bridge, $amountUnits, $orderId),
+            'approve' => $this->approveTx($token, $vault, $amountUnits),
+            'deposit' => $this->depositTx($token, $vault, $amountUnits, $orderId),
         ]);
     }
 
-    public function nextStep(DepositTxOrderView $order): DepositTxStep
+    public function nextStep(DepositTxOrderView $order, SignerInterface $signer): DepositTxStep
     {
-        $userAddress = $order->getUserWallet()?->userAddress();
-        if (null === $userAddress || '' === $userAddress) {
-            throw new InvalidArgumentException('Erc20DepositTxBuilder::nextStep requires a bound user wallet for the allowance check.');
-        }
-
-        $fromAmount  = (string) $order->getFromAmount();
-        $bridge      = strtolower((string) $order->getDepositAddress());
+        $vault       = strtolower($order->getVault()->getAddress());
         $token       = strtolower($this->usdtTokenAddress);
         $orderId     = $this->uuidIntCodec->encode((string) $order->getOrderId());
         $amountUnits = $this->amountUnits($order);
+        $fromAmount  = (string) $order->getFromAmount();
 
-        if ($this->hasSufficientAllowance($token, $userAddress, $bridge, $amountUnits)) {
+        if (!$this->hasSufficientBalance($token, $signer->getAddress(), $amountUnits)) {
+            throw new InvalidArgumentException('Erc20DepositTxBuilder: signer USDT balance is below the deposit amount.');
+        }
+
+        if ($this->hasSufficientAllowance($token, $signer->getAddress(), $vault, $amountUnits)) {
             return new DepositTxStep(
                 kind: 'evm-deposit-erc20',
                 buttonLabel: sprintf('Deposit %s USDT to bridge', $fromAmount),
-                tx: $this->withGas($this->depositTx($token, $bridge, $amountUnits, $orderId), $userAddress),
+                tx: $this->depositTx($token, $vault, $amountUnits, $orderId),
                 done: false,
             );
         }
@@ -65,7 +63,7 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
         return new DepositTxStep(
             kind: 'evm-approve',
             buttonLabel: sprintf('Approve %s USDT spending', $fromAmount),
-            tx: $this->withGas($this->approveTx($token, $bridge, $amountUnits), $userAddress),
+            tx: $this->approveTx($token, $vault, $amountUnits),
             done: false,
         );
     }
@@ -73,12 +71,12 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
     /**
      * @return array<string, mixed>
      */
-    private function approveTx(string $token, string $bridge, string $amountUnits): array
+    private function approveTx(string $token, string $vault, string $amountUnits): array
     {
         return [
             'to'      => $token,
             'data'    => AbiEncoder::encodeCall('approve(address,uint256)', [
-                ['address', $bridge],
+                ['address', $vault],
                 ['uint256', $amountUnits],
             ]),
             'value'   => '0x0',
@@ -89,10 +87,10 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
     /**
      * @return array<string, mixed>
      */
-    private function depositTx(string $token, string $bridge, string $amountUnits, string $orderId): array
+    private function depositTx(string $token, string $vault, string $amountUnits, string $orderId): array
     {
         return [
-            'to'      => $bridge,
+            'to'      => $vault,
             'data'    => AbiEncoder::encodeCall('depositTokenForBridge(address,uint256,uint256)', [
                 ['address', $token],
                 ['uint256', $amountUnits],
@@ -113,29 +111,30 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
         return bcmul($fromAmount, '1000000', 0);
     }
 
-    /**
-     * @param array<string, mixed> $tx
-     *
-     * @return array<string, mixed>
-     */
-    private function withGas(array $tx, string $from): array
+    private function hasSufficientBalance(string $token, string $signer, string $requiredUnits): bool
     {
-        $gas = $this->gasEstimator->estimateForTx($tx, $from);
-        if (null !== $gas) {
-            $tx['gas'] = $gas;
+        try {
+            $callData = AbiEncoder::encodeCall('balanceOf(address)', [['address', strtolower($signer)]]);
+            $result   = $this->ethRpc->eth_call(['to' => $token, 'data' => $callData], 'latest');
+        } catch (Throwable) {
+            return false;
         }
 
-        return $tx;
+        if ('' === $result || '0x' === $result || !is_numeric($requiredUnits)) {
+            return false;
+        }
+
+        return bccomp(HexBig::fromHex($result), $requiredUnits, 0) >= 0;
     }
 
-    private function hasSufficientAllowance(string $token, string $userAddress, string $bridge, string $requiredUnits): bool
+    private function hasSufficientAllowance(string $token, string $signer, string $vault, string $requiredUnits): bool
     {
         try {
             $callData = AbiEncoder::encodeCall(
                 'allowance(address,address)',
                 [
-                    ['address', strtolower($userAddress)],
-                    ['address', $bridge],
+                    ['address', strtolower($signer)],
+                    ['address', $vault],
                 ],
             );
             $result = $this->ethRpc->eth_call([

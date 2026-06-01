@@ -28,7 +28,7 @@ final class DepositTxOrderViewTest extends TestCase
                 'getFromChain',
                 'getId',
                 'getOrderId',
-                'getUserWallet',
+                'getVault',
             ],
             $methods,
             'DepositTxOrderView is the contract every host-app Order implements for tx assembly — adding a method ripples through every entity that implements it. Keep this list pinned.',
