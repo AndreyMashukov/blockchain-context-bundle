@@ -9,6 +9,7 @@ use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxBuilderInterfac
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxPayload;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxStep;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\UserWalletInterface;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -26,14 +27,14 @@ final class DepositTxBuilderChainTest extends TestCase
                 return 'ton' === $chain;
             }
 
-            public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
+            public function build(DepositTxOrderView $order): DepositTxPayload
             {
                 $this->built = true;
 
                 return new DepositTxPayload('ton-native', ['marker' => 'matched']);
             }
 
-            public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+            public function nextStep(DepositTxOrderView $order): DepositTxStep
             {
                 return DepositTxStep::done();
             }
@@ -48,12 +49,12 @@ final class DepositTxBuilderChainTest extends TestCase
                 return true;
             }
 
-            public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
+            public function build(DepositTxOrderView $order): DepositTxPayload
             {
                 return new DepositTxPayload('ton-native', ['marker' => 'tail']);
             }
 
-            public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+            public function nextStep(DepositTxOrderView $order): DepositTxStep
             {
                 return DepositTxStep::done();
             }
@@ -76,12 +77,12 @@ final class DepositTxBuilderChainTest extends TestCase
                     return 'eth' === $chain;
                 }
 
-                public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
+                public function build(DepositTxOrderView $order): DepositTxPayload
                 {
                     return new DepositTxPayload('evm-native', []);
                 }
 
-                public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+                public function nextStep(DepositTxOrderView $order): DepositTxStep
                 {
                     return DepositTxStep::done();
                 }
@@ -103,46 +104,55 @@ final class DepositTxBuilderChainTest extends TestCase
         $chain->build($this->orderView('ton'));
     }
 
-    public function testContextIsForwardedToMatchingBuilder(): void
+    public function testOrderIsForwardedToMatchingBuilder(): void
     {
         $matched = new class implements DepositTxBuilderInterface {
-            /**
-             * @param array<string, mixed> $seenContext
-             */
-            public function __construct(public array $seenContext = []) {}
+            public ?string $seenUserAddress = null;
+
+            public ?string $seenJettonWallet = null;
 
             public function supports(string $chain): bool
             {
                 return 'usdt_jetton' === $chain;
             }
 
-            public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
+            public function build(DepositTxOrderView $order): DepositTxPayload
             {
-                $this->seenContext = $context;
+                $this->seenUserAddress  = $order->getUserWallet()?->userAddress();
+                $this->seenJettonWallet = $order->getUserWallet()?->userJettonWallet();
 
                 return new DepositTxPayload('ton-jetton', []);
             }
 
-            public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+            public function nextStep(DepositTxOrderView $order): DepositTxStep
             {
                 return DepositTxStep::done();
             }
         };
 
         $chain = new DepositTxBuilderChain([$matched]);
-        $chain->build($this->orderView('usdt_jetton'), [
-            'userAddress'      => 'UQuser_address',
-            'userJettonWallet' => 'EQuser_jetton_wallet',
-        ]);
+        $chain->build($this->orderView('usdt_jetton'));
 
-        self::assertSame('UQuser_address', $matched->seenContext['userAddress']);
-        self::assertSame('EQuser_jetton_wallet', $matched->seenContext['userJettonWallet']);
+        self::assertSame('UQuser_address', $matched->seenUserAddress);
+        self::assertSame('EQuser_jetton_wallet', $matched->seenJettonWallet);
     }
 
     private function orderView(string $chain): DepositTxOrderView
     {
-        return new readonly class ($chain) implements DepositTxOrderView {
-            public function __construct(private string $chain) {}
+        $wallet = new readonly class implements UserWalletInterface {
+            public function userAddress(): string
+            {
+                return 'UQuser_address';
+            }
+
+            public function userJettonWallet(): string
+            {
+                return 'EQuser_jetton_wallet';
+            }
+        };
+
+        return new readonly class ($chain, $wallet) implements DepositTxOrderView {
+            public function __construct(private string $chain, private UserWalletInterface $wallet) {}
 
             public function getId(): int
             {
@@ -172,6 +182,11 @@ final class DepositTxBuilderChainTest extends TestCase
             public function getDepositMemo(): string
             {
                 return 'memo42';
+            }
+
+            public function getUserWallet(): UserWalletInterface
+            {
+                return $this->wallet;
             }
         };
     }

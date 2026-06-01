@@ -18,7 +18,8 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
         private string $usdtTokenAddress,
         private int $chainId,
         private UuidIntCodec $uuidIntCodec,
-        private ?EthRpcClientInterface $ethRpc = null,
+        private EthRpcClientInterface $ethRpc,
+        private GasEstimatorInterface $gasEstimator,
     ) {}
 
     public function supports(string $chain): bool
@@ -26,80 +27,37 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
         return 'usdt_erc20' === $chain;
     }
 
-    public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
+    public function build(DepositTxOrderView $order): DepositTxPayload
     {
-        $bridge     = strtolower((string) $order->getDepositAddress());
-        $token      = strtolower($this->usdtTokenAddress);
-        $orderId    = $this->uuidIntCodec->encode((string) $order->getOrderId());
-        $fromAmount = (string) $order->getFromAmount();
-        if (!is_numeric($fromAmount)) {
-            throw new InvalidArgumentException(sprintf('Erc20DepositTxBuilder: order.fromAmount must be numeric-string; got "%s".', $fromAmount));
-        }
-        $amountUnits = bcmul($fromAmount, '1000000', 0);
-
-        $approveData = AbiEncoder::encodeCall(
-            'approve(address,uint256)',
-            [
-                ['address', $bridge],
-                ['uint256', $amountUnits],
-            ],
-        );
-
-        $depositData = AbiEncoder::encodeCall(
-            'depositTokenForBridge(address,uint256,uint256)',
-            [
-                ['address', $token],
-                ['uint256', $amountUnits],
-                ['uint256', $orderId],
-            ],
-        );
-
-        $chainIdHex = HexInt::toHex($this->chainId);
+        $bridge      = strtolower((string) $order->getDepositAddress());
+        $token       = strtolower($this->usdtTokenAddress);
+        $orderId     = $this->uuidIntCodec->encode((string) $order->getOrderId());
+        $amountUnits = $this->amountUnits($order);
 
         return new DepositTxPayload('evm-erc20', [
-            'approve' => [
-                'to'      => $token,
-                'data'    => $approveData,
-                'value'   => '0x0',
-                'chainId' => $chainIdHex,
-            ],
-            'deposit' => [
-                'to'      => $bridge,
-                'data'    => $depositData,
-                'value'   => '0x0',
-                'chainId' => $chainIdHex,
-            ],
+            'approve' => $this->approveTx($token, $bridge, $amountUnits),
+            'deposit' => $this->depositTx($token, $bridge, $amountUnits, $orderId),
         ]);
     }
 
-    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+    public function nextStep(DepositTxOrderView $order): DepositTxStep
     {
-        $payload     = $this->build($order, $context);
+        $userAddress = $order->getUserWallet()?->userAddress();
+        if (null === $userAddress || '' === $userAddress) {
+            throw new InvalidArgumentException('Erc20DepositTxBuilder::nextStep requires a bound user wallet for the allowance check.');
+        }
+
         $fromAmount  = (string) $order->getFromAmount();
-        $userAddress = $context['userAddress'] ?? '';
-
-        if ('' === $userAddress) {
-            throw new InvalidArgumentException('Erc20DepositTxBuilder::nextStep requires context[userAddress] for allowance check.');
-        }
-
-        if (!is_numeric($fromAmount)) {
-            throw new InvalidArgumentException(sprintf('Erc20DepositTxBuilder::nextStep: order.fromAmount must be numeric-string; got "%s".', $fromAmount));
-        }
-
         $bridge      = strtolower((string) $order->getDepositAddress());
         $token       = strtolower($this->usdtTokenAddress);
-        $amountUnits = bcmul($fromAmount, '1000000', 0);
-
-        /** @var array<string, mixed>|null $depositTx */
-        $depositTx = $payload->payload['deposit'] ?? null;
-        /** @var array<string, mixed>|null $approveTx */
-        $approveTx = $payload->payload['approve'] ?? null;
+        $orderId     = $this->uuidIntCodec->encode((string) $order->getOrderId());
+        $amountUnits = $this->amountUnits($order);
 
         if ($this->hasSufficientAllowance($token, $userAddress, $bridge, $amountUnits)) {
             return new DepositTxStep(
                 kind: 'evm-deposit-erc20',
                 buttonLabel: sprintf('Deposit %s USDT to bridge', $fromAmount),
-                tx: $depositTx,
+                tx: $this->withGas($this->depositTx($token, $bridge, $amountUnits, $orderId), $userAddress),
                 done: false,
             );
         }
@@ -107,17 +65,71 @@ final readonly class Erc20DepositTxBuilder implements DepositTxBuilderInterface
         return new DepositTxStep(
             kind: 'evm-approve',
             buttonLabel: sprintf('Approve %s USDT spending', $fromAmount),
-            tx: $approveTx,
+            tx: $this->withGas($this->approveTx($token, $bridge, $amountUnits), $userAddress),
             done: false,
         );
     }
 
-    private function hasSufficientAllowance(string $token, string $userAddress, string $bridge, string $requiredUnits): bool
+    /**
+     * @return array<string, mixed>
+     */
+    private function approveTx(string $token, string $bridge, string $amountUnits): array
     {
-        if (null === $this->ethRpc) {
-            return false;
+        return [
+            'to'      => $token,
+            'data'    => AbiEncoder::encodeCall('approve(address,uint256)', [
+                ['address', $bridge],
+                ['uint256', $amountUnits],
+            ]),
+            'value'   => '0x0',
+            'chainId' => HexInt::toHex($this->chainId),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function depositTx(string $token, string $bridge, string $amountUnits, string $orderId): array
+    {
+        return [
+            'to'      => $bridge,
+            'data'    => AbiEncoder::encodeCall('depositTokenForBridge(address,uint256,uint256)', [
+                ['address', $token],
+                ['uint256', $amountUnits],
+                ['uint256', $orderId],
+            ]),
+            'value'   => '0x0',
+            'chainId' => HexInt::toHex($this->chainId),
+        ];
+    }
+
+    private function amountUnits(DepositTxOrderView $order): string
+    {
+        $fromAmount = (string) $order->getFromAmount();
+        if (!is_numeric($fromAmount)) {
+            throw new InvalidArgumentException(sprintf('Erc20DepositTxBuilder: order.fromAmount must be numeric-string; got "%s".', $fromAmount));
         }
 
+        return bcmul($fromAmount, '1000000', 0);
+    }
+
+    /**
+     * @param array<string, mixed> $tx
+     *
+     * @return array<string, mixed>
+     */
+    private function withGas(array $tx, string $from): array
+    {
+        $gas = $this->gasEstimator->estimateForTx($tx, $from);
+        if (null !== $gas) {
+            $tx['gas'] = $gas;
+        }
+
+        return $tx;
+    }
+
+    private function hasSufficientAllowance(string $token, string $userAddress, string $bridge, string $requiredUnits): bool
+    {
         try {
             $callData = AbiEncoder::encodeCall(
                 'allowance(address,address)',

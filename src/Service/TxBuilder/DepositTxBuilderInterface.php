@@ -8,13 +8,7 @@ interface DepositTxBuilderInterface
 {
     public function supports(string $chain): bool;
 
-    /**
-     * @param array<string, string> $context
-     */
-    public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload;
+    public function build(DepositTxOrderView $order): DepositTxPayload;
 
-    /**
-     * @param array<string, string> $context
-     */
-    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep;
+    public function nextStep(DepositTxOrderView $order): DepositTxStep;
 }

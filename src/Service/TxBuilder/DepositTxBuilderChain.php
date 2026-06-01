@@ -17,29 +17,23 @@ final readonly class DepositTxBuilderChain
         private iterable $builders,
     ) {}
 
-    /**
-     * @param array<string, string> $context
-     */
-    public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
+    public function build(DepositTxOrderView $order): DepositTxPayload
     {
         $chain = (string) $order->getFromChain();
         foreach ($this->builders as $builder) {
             if ($builder->supports($chain)) {
-                return $builder->build($order, $context);
+                return $builder->build($order);
             }
         }
         throw new LogicException(sprintf('No DepositTxBuilder supports chain "%s"', $chain));
     }
 
-    /**
-     * @param array<string, string> $context
-     */
-    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+    public function nextStep(DepositTxOrderView $order): DepositTxStep
     {
         $chain = (string) $order->getFromChain();
         foreach ($this->builders as $builder) {
             if ($builder->supports($chain)) {
-                return $builder->nextStep($order, $context);
+                return $builder->nextStep($order);
             }
         }
         throw new LogicException(sprintf('No DepositTxBuilder supports chain "%s"', $chain));

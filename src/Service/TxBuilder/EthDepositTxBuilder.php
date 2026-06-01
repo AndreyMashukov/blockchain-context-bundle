@@ -15,6 +15,7 @@ final readonly class EthDepositTxBuilder implements DepositTxBuilderInterface
     public function __construct(
         private int $chainId,
         private UuidIntCodec $uuidIntCodec,
+        private GasEstimatorInterface $gasEstimator,
     ) {}
 
     public function supports(string $chain): bool
@@ -22,7 +23,7 @@ final readonly class EthDepositTxBuilder implements DepositTxBuilderInterface
         return 'eth' === $chain;
     }
 
-    public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
+    public function build(DepositTxOrderView $order): DepositTxPayload
     {
         $to         = strtolower((string) $order->getDepositAddress());
         $orderId    = $this->uuidIntCodec->encode((string) $order->getOrderId());
@@ -45,14 +46,23 @@ final readonly class EthDepositTxBuilder implements DepositTxBuilderInterface
         ]);
     }
 
-    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+    public function nextStep(DepositTxOrderView $order): DepositTxStep
     {
-        $payload = $this->build($order, $context);
+        $payload = $this->build($order);
+        $tx      = $payload->payload;
+        $from    = $order->getUserWallet()?->userAddress();
+
+        if (null !== $from && '' !== $from) {
+            $gas = $this->gasEstimator->estimateForTx($tx, $from);
+            if (null !== $gas) {
+                $tx['gas'] = $gas;
+            }
+        }
 
         return new DepositTxStep(
             kind: 'evm-deposit-native',
             buttonLabel: sprintf('Send %s ETH', (string) $order->getFromAmount()),
-            tx: $payload->payload,
+            tx: $tx,
             done: false,
         );
     }

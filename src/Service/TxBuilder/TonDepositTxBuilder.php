@@ -15,7 +15,7 @@ final readonly class TonDepositTxBuilder implements DepositTxBuilderInterface
         return 'ton' === $chain;
     }
 
-    public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
+    public function build(DepositTxOrderView $order): DepositTxPayload
     {
         $depositAddress = (string) $order->getDepositAddress();
         $fromAmount     = (string) $order->getFromAmount();
@@ -38,9 +38,9 @@ final readonly class TonDepositTxBuilder implements DepositTxBuilderInterface
         ]);
     }
 
-    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+    public function nextStep(DepositTxOrderView $order): DepositTxStep
     {
-        $payload = $this->build($order, $context);
+        $payload = $this->build($order);
 
         return new DepositTxStep(
             kind: 'ton-deposit-native',

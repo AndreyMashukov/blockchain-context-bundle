@@ -135,6 +135,7 @@ services:
             $builders: !tagged_iterator 'blockchain_context.deposit_tx_builder'
 
     # --- domain interface → impl aliases ---
+    Amashukov\BlockchainContextBundle\Service\TxBuilder\GasEstimatorInterface: '@Amashukov\BlockchainContextBundle\Service\TxBuilder\NullGasEstimator'
     Amashukov\BlockchainContextBundle\Service\SignatureVerifierInterface: '@Amashukov\BlockchainContextBundle\Service\SignatureVerifier'
     Amashukov\BlockchainContextBundle\Service\Gas\EthGasFetcherInterface: '@Amashukov\BlockchainContextBundle\Service\Gas\EthGasFetcher'
     Amashukov\BlockchainContextBundle\Service\Gas\TonGasFetcherInterface: '@Amashukov\BlockchainContextBundle\Service\Gas\TonGasFetcher'

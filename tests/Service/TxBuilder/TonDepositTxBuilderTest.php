@@ -6,6 +6,7 @@ namespace Amashukov\BlockchainContextBundle\Tests\Service\TxBuilder;
 
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\TonDepositTxBuilder;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\UserWalletInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -91,6 +92,11 @@ final class TonDepositTxBuilderTest extends TestCase
             public function getDepositMemo(): string
             {
                 return $this->memo;
+            }
+
+            public function getUserWallet(): ?UserWalletInterface
+            {
+                return null;
             }
         };
     }

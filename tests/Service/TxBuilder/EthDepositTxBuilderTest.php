@@ -8,6 +8,9 @@ use Amashukov\AbiEncoder\AbiEncoder;
 use Amashukov\BlockchainContextBundle\Service\Numeric\UuidIntCodec;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\EthDepositTxBuilder;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\GasEstimatorInterface;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\NullGasEstimator;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\UserWalletInterface;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -18,9 +21,13 @@ final class EthDepositTxBuilderTest extends TestCase
 
     private const string UUID_HEX = 'f8a3b2c14d5e6789abcdef0123456789';
 
-    private function newBuilder(int $chainId): EthDepositTxBuilder
+    private function newBuilder(int $chainId, ?GasEstimatorInterface $gasEstimator = null): EthDepositTxBuilder
     {
-        return new EthDepositTxBuilder(chainId: $chainId, uuidIntCodec: new UuidIntCodec());
+        return new EthDepositTxBuilder(
+            chainId: $chainId,
+            uuidIntCodec: new UuidIntCodec(),
+            gasEstimator: $gasEstimator ?? new NullGasEstimator(),
+        );
     }
 
     public function testSupportsEthOnly(): void
@@ -80,10 +87,48 @@ final class EthDepositTxBuilderTest extends TestCase
         self::assertNotSame($this->field($payloadA->payload, 'data'), $this->field($payloadB->payload, 'data'));
     }
 
-    private function order(string $orderUuid, string $fromAmount): DepositTxOrderView
+    public function testNextStepStampsGasFromEstimatorWhenWalletBound(): void
     {
-        return new readonly class ($orderUuid, $fromAmount) implements DepositTxOrderView {
-            public function __construct(private string $orderUuid, private string $fromAmount) {}
+        $gas = $this->createStub(GasEstimatorInterface::class);
+        $gas->method('estimateForTx')->willReturn('0x5208');
+
+        $builder = $this->newBuilder(1, $gas);
+        $step    = $builder->nextStep($this->order(self::UUID, '1.5'));
+
+        self::assertSame('evm-deposit-native', $step->kind);
+        self::assertSame('0x5208', $this->field($step->tx ?? [], 'gas'));
+    }
+
+    public function testNextStepSkipsGasWhenNoBoundWallet(): void
+    {
+        $gas = $this->createStub(GasEstimatorInterface::class);
+        $gas->method('estimateForTx')->willReturn('0x5208');
+
+        $builder = $this->newBuilder(1, $gas);
+        $order   = $this->order(self::UUID, '1.5', userAddress: null);
+        $step    = $builder->nextStep($order);
+
+        self::assertSame($builder->build($order)->payload, $step->tx);
+    }
+
+    private function order(string $orderUuid, string $fromAmount, ?string $userAddress = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'): DepositTxOrderView
+    {
+        $wallet = new readonly class ($userAddress) implements UserWalletInterface {
+            public function __construct(private ?string $userAddress) {}
+
+            public function userAddress(): ?string
+            {
+                return $this->userAddress;
+            }
+
+            public function userJettonWallet(): ?string
+            {
+                return null;
+            }
+        };
+
+        return new readonly class ($orderUuid, $fromAmount, $wallet) implements DepositTxOrderView {
+            public function __construct(private string $orderUuid, private string $fromAmount, private UserWalletInterface $wallet) {}
 
             public function getId(): int
             {
@@ -113,6 +158,11 @@ final class EthDepositTxBuilderTest extends TestCase
             public function getDepositMemo(): ?string
             {
                 return null;
+            }
+
+            public function getUserWallet(): UserWalletInterface
+            {
+                return $this->wallet;
             }
         };
     }

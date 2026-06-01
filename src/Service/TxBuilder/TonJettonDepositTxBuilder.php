@@ -25,13 +25,14 @@ final readonly class TonJettonDepositTxBuilder implements DepositTxBuilderInterf
         return 'usdt_jetton' === $chain;
     }
 
-    public function build(DepositTxOrderView $order, array $context = []): DepositTxPayload
+    public function build(DepositTxOrderView $order): DepositTxPayload
     {
-        $userAddress      = $context['userAddress']      ?? '';
-        $userJettonWallet = $context['userJettonWallet'] ?? '';
+        $wallet           = $order->getUserWallet();
+        $userAddress      = $wallet?->userAddress();
+        $userJettonWallet = $wallet?->userJettonWallet();
 
-        if ('' === $userAddress || '' === $userJettonWallet) {
-            throw new InvalidArgumentException('TonJettonDepositTxBuilder: userAddress + userJettonWallet are required for USDT-Jetton deposits.');
+        if (null === $userAddress || '' === $userAddress || null === $userJettonWallet || '' === $userJettonWallet) {
+            throw new InvalidArgumentException('TonJettonDepositTxBuilder: bound owner + jetton wallet are required for USDT-Jetton deposits.');
         }
         if ('' === $this->bridgeContractAddress) {
             throw new InvalidArgumentException('TonJettonDepositTxBuilder: BRIDGE_TON_CONTRACT env not configured.');
@@ -65,9 +66,9 @@ final readonly class TonJettonDepositTxBuilder implements DepositTxBuilderInterf
         ]);
     }
 
-    public function nextStep(DepositTxOrderView $order, array $context = []): DepositTxStep
+    public function nextStep(DepositTxOrderView $order): DepositTxStep
     {
-        $payload = $this->build($order, $context);
+        $payload = $this->build($order);
 
         return new DepositTxStep(
             kind: 'ton-deposit-jetton',

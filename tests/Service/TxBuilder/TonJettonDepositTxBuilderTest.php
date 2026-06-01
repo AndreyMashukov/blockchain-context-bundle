@@ -11,6 +11,7 @@ use Amashukov\TonCell\Builder;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxPayload;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\TonJettonDepositTxBuilder;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\UserWalletInterface;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -54,11 +55,9 @@ final class TonJettonDepositTxBuilderTest extends TestCase
         $builder = new TonJettonDepositTxBuilder(self::BRIDGE_CONTRACT);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('userAddress + userJettonWallet are required');
+        $this->expectExceptionMessage('bound owner + jetton wallet are required');
 
-        $builder->build($this->order('100', 'memo42'), [
-            'userJettonWallet' => self::USER_JETTON_WALLET,
-        ]);
+        $builder->build($this->order('100', 'memo42', userAddress: null));
     }
 
     public function testBuildRejectsMissingUserJettonWallet(): void
@@ -66,11 +65,9 @@ final class TonJettonDepositTxBuilderTest extends TestCase
         $builder = new TonJettonDepositTxBuilder(self::BRIDGE_CONTRACT);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('userAddress + userJettonWallet are required');
+        $this->expectExceptionMessage('bound owner + jetton wallet are required');
 
-        $builder->build($this->order('100', 'memo42'), [
-            'userAddress' => self::USER_ADDRESS,
-        ]);
+        $builder->build($this->order('100', 'memo42', userJettonWallet: null));
     }
 
     public function testBuildRejectsMissingBridgeContract(): void
@@ -80,10 +77,7 @@ final class TonJettonDepositTxBuilderTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('BRIDGE_TON_CONTRACT env not configured');
 
-        $builder->build($this->order('100', 'memo42'), [
-            'userAddress'      => self::USER_ADDRESS,
-            'userJettonWallet' => self::USER_JETTON_WALLET,
-        ]);
+        $builder->build($this->order('100', 'memo42'));
     }
 
     public function testBuildBodyEncodesDestinationAsBridgeContractEnvNotJettonWalletAddress(): void
@@ -190,10 +184,7 @@ final class TonJettonDepositTxBuilderTest extends TestCase
     {
         $builder = new TonJettonDepositTxBuilder($bridgeContractAddress);
 
-        return $builder->build($this->order($fromAmount, $memo), [
-            'userAddress'      => self::USER_ADDRESS,
-            'userJettonWallet' => self::USER_JETTON_WALLET,
-        ]);
+        return $builder->build($this->order($fromAmount, $memo));
     }
 
     private function buildExpectedBodyBoc(
@@ -223,10 +214,28 @@ final class TonJettonDepositTxBuilderTest extends TestCase
         return Boc::encodeBase64($body);
     }
 
-    private function order(string $fromAmount, string $memo): DepositTxOrderView
-    {
-        return new readonly class ($fromAmount, $memo) implements DepositTxOrderView {
-            public function __construct(private string $fromAmount, private string $memo) {}
+    private function order(
+        string $fromAmount,
+        string $memo,
+        ?string $userAddress = self::USER_ADDRESS,
+        ?string $userJettonWallet = self::USER_JETTON_WALLET,
+    ): DepositTxOrderView {
+        $wallet = new readonly class ($userAddress, $userJettonWallet) implements UserWalletInterface {
+            public function __construct(private ?string $userAddress, private ?string $userJettonWallet) {}
+
+            public function userAddress(): ?string
+            {
+                return $this->userAddress;
+            }
+
+            public function userJettonWallet(): ?string
+            {
+                return $this->userJettonWallet;
+            }
+        };
+
+        return new readonly class ($fromAmount, $memo, $wallet) implements DepositTxOrderView {
+            public function __construct(private string $fromAmount, private string $memo, private UserWalletInterface $wallet) {}
 
             public function getId(): int
             {
@@ -256,6 +265,11 @@ final class TonJettonDepositTxBuilderTest extends TestCase
             public function getDepositMemo(): string
             {
                 return $this->memo;
+            }
+
+            public function getUserWallet(): UserWalletInterface
+            {
+                return $this->wallet;
             }
         };
     }

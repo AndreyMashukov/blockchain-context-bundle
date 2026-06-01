@@ -8,6 +8,11 @@ use Amashukov\AbiEncoder\AbiEncoder;
 use Amashukov\BlockchainContextBundle\Service\Numeric\UuidIntCodec;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\DepositTxOrderView;
 use Amashukov\BlockchainContextBundle\Service\TxBuilder\Erc20DepositTxBuilder;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\GasEstimatorInterface;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\NullGasEstimator;
+use Amashukov\BlockchainContextBundle\Service\TxBuilder\UserWalletInterface;
+use Amashukov\EthRpc\EthRpcClientInterface;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -20,9 +25,28 @@ final class Erc20DepositTxBuilderTest extends TestCase
 
     private const string UUID_HEX = 'f8a3b2c14d5e6789abcdef0123456789';
 
-    private function newBuilder(int $chainId): Erc20DepositTxBuilder
+    private const string USER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+    private function newBuilder(
+        int $chainId,
+        ?EthRpcClientInterface $ethRpc = null,
+        ?GasEstimatorInterface $gasEstimator = null,
+    ): Erc20DepositTxBuilder {
+        return new Erc20DepositTxBuilder(
+            usdtTokenAddress: self::USDT,
+            chainId: $chainId,
+            uuidIntCodec: new UuidIntCodec(),
+            ethRpc: $ethRpc ?? $this->ethRpcReturning('0x0'),
+            gasEstimator: $gasEstimator ?? new NullGasEstimator(),
+        );
+    }
+
+    private function ethRpcReturning(string $hex): EthRpcClientInterface
     {
-        return new Erc20DepositTxBuilder(usdtTokenAddress: self::USDT, chainId: $chainId, uuidIntCodec: new UuidIntCodec());
+        $rpc = $this->createStub(EthRpcClientInterface::class);
+        $rpc->method('eth_call')->willReturn($hex);
+
+        return $rpc;
     }
 
     public function testSupportsUsdtErc20Only(): void
@@ -109,6 +133,45 @@ final class Erc20DepositTxBuilderTest extends TestCase
         self::assertSame('0xaa36a7', $this->field($payload->payload, 'deposit', 'chainId'));
     }
 
+    public function testNextStepRejectsOrderWithoutBoundWallet(): void
+    {
+        $builder = $this->newBuilder(1);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('requires a bound user wallet');
+
+        $builder->nextStep($this->order(self::UUID, '100', userAddress: null));
+    }
+
+    public function testNextStepReturnsApproveWhenAllowanceInsufficient(): void
+    {
+        $builder = $this->newBuilder(1, $this->ethRpcReturning('0x0'));
+        $step    = $builder->nextStep($this->order(self::UUID, '100'));
+
+        self::assertSame('evm-approve', $step->kind);
+        self::assertSame(strtolower(self::USDT), $this->txField($step->tx, 'to'));
+    }
+
+    public function testNextStepReturnsDepositWhenAllowanceSufficient(): void
+    {
+        $builder = $this->newBuilder(1, $this->ethRpcReturning('0x' . str_repeat('f', 64)));
+        $step    = $builder->nextStep($this->order(self::UUID, '100'));
+
+        self::assertSame('evm-deposit-erc20', $step->kind);
+        self::assertSame('0x1234567890abcdef1234567890abcdef12345678', $this->txField($step->tx, 'to'));
+    }
+
+    public function testNextStepStampsGasFromEstimator(): void
+    {
+        $gas = $this->createStub(GasEstimatorInterface::class);
+        $gas->method('estimateForTx')->willReturn('0x5208');
+
+        $builder = $this->newBuilder(1, $this->ethRpcReturning('0x0'), $gas);
+        $step    = $builder->nextStep($this->order(self::UUID, '100'));
+
+        self::assertSame('0x5208', $this->txField($step->tx, 'gas'));
+    }
+
     /**
      * @param array<string, mixed> $payload
      */
@@ -123,10 +186,37 @@ final class Erc20DepositTxBuilderTest extends TestCase
         return $val;
     }
 
-    private function order(string $orderUuid, string $fromAmount): DepositTxOrderView
+    /**
+     * @param array<string, mixed>|null $tx
+     */
+    private function txField(?array $tx, string $key): string
     {
-        return new readonly class ($orderUuid, $fromAmount) implements DepositTxOrderView {
-            public function __construct(private string $orderUuid, private string $fromAmount) {}
+        $val = $tx[$key] ?? null;
+        if (!is_string($val)) {
+            self::fail(sprintf('tx[%s] is not a string', $key));
+        }
+
+        return $val;
+    }
+
+    private function order(string $orderUuid, string $fromAmount, ?string $userAddress = self::USER): DepositTxOrderView
+    {
+        $wallet = new readonly class ($userAddress) implements UserWalletInterface {
+            public function __construct(private ?string $userAddress) {}
+
+            public function userAddress(): ?string
+            {
+                return $this->userAddress;
+            }
+
+            public function userJettonWallet(): ?string
+            {
+                return null;
+            }
+        };
+
+        return new readonly class ($orderUuid, $fromAmount, $wallet) implements DepositTxOrderView {
+            public function __construct(private string $orderUuid, private string $fromAmount, private UserWalletInterface $wallet) {}
 
             public function getId(): int
             {
@@ -156,6 +246,11 @@ final class Erc20DepositTxBuilderTest extends TestCase
             public function getDepositMemo(): ?string
             {
                 return null;
+            }
+
+            public function getUserWallet(): UserWalletInterface
+            {
+                return $this->wallet;
             }
         };
     }
