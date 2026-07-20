@@ -78,6 +78,47 @@ services:
             $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
     Amashukov\Toncenter\ToncenterClientInterface: '@Amashukov\Toncenter\ToncenterClient'
 
+    # --- Lightning / LND REST transport (CurlClient + macaroon header + retry) ---
+    # The macaroon is a bearer token: whoever holds it can move the channel
+    # balance. It is injected here as a header so no call site can forget it,
+    # and the host is expected to supply an APP-SCOPED macaroon (invoices,
+    # offchain, info) — never the admin one.
+    blockchain_context.lnd_curl_client:
+        class: Amashukov\HttpClient\CurlClient
+        arguments:
+            $responseFactory: '@Psr\Http\Message\ResponseFactoryInterface'
+            $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
+            $timeoutSeconds: 70
+            $connectTimeoutSeconds: 15
+
+    blockchain_context.lnd_retry:
+        class: Amashukov\HttpClient\Middleware\RetryMiddleware
+        arguments:
+            $maxAttempts: 3
+            $retryStatusCodes: [429, 500, 502, 503, 504]
+            $baseDelayMs: 500
+
+    blockchain_context.lnd_macaroon:
+        class: Amashukov\HttpClient\Middleware\HeaderInjectionMiddleware
+        arguments:
+            $headers: { 'Grpc-Metadata-macaroon': '%blockchain_context.lightning.macaroon_hex%' }
+
+    blockchain_context.lnd_http:
+        class: Amashukov\HttpClient\Pipeline
+        arguments:
+            $inner: '@blockchain_context.lnd_curl_client'
+            $middlewares:
+                - '@blockchain_context.lnd_macaroon'
+                - '@blockchain_context.lnd_retry'
+
+    Amashukov\Lnd\LndClient:
+        arguments:
+            $http: '@blockchain_context.lnd_http'
+            $requestFactory: '@Psr\Http\Message\RequestFactoryInterface'
+            $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
+            $baseUrl: '%blockchain_context.lightning.rest_url%'
+    Amashukov\Lnd\LndClientInterface: '@Amashukov\Lnd\LndClient'
+
     Amashukov\Toncenter\ToncenterWalletRpc: ~
     Amashukov\TonWallet\WalletRpcInterface: '@Amashukov\Toncenter\ToncenterWalletRpc'
 

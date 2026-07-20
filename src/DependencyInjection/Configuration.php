@@ -35,6 +35,13 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('explorer')->defaultValue('https://tonscan.org')->end()
                     ->end()
                 ->end()
+                ->arrayNode('lightning')
+                    ->canBeDisabled()
+                    ->children()
+                        ->scalarNode('rest_url')->defaultValue('')->end()
+                        ->scalarNode('macaroon_hex')->defaultValue('')->end()
+                    ->end()
+                ->end()
                 ->scalarNode('deposit_wallet_encryption_key')->defaultValue('')->end()
             ->end();
 

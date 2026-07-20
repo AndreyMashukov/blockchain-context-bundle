@@ -29,7 +29,7 @@ final class BlockchainContextExtension extends Extension
     {
         $config = $this->processConfiguration(new Configuration(), $configs);
 
-        foreach (['eth', 'ton'] as $chain) {
+        foreach (['eth', 'ton', 'lightning'] as $chain) {
             foreach ($config[$chain] as $key => $value) {
                 $container->setParameter(sprintf('blockchain_context.%s.%s', $chain, $key), $value);
             }
