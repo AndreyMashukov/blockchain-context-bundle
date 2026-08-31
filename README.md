@@ -1,6 +1,6 @@
 # amashukov/blockchain-context-bundle
 
-Symfony 7 bundle for crypto payments — autowires the pure-PHP TON + EVM SDKs into typed RPC clients, signature verification, key encryption, and per-chain finality / detection / gas / tx-builder services.
+Symfony 7 bundle for crypto payments — provides typed Bitcoin Core, TON and EVM clients alongside signature, finality and transaction-building services.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/AndreyMashukov/blockchain-context-bundle/ci.yml?branch=main&label=CI)](https://github.com/AndreyMashukov/blockchain-context-bundle/actions)
 [![PHPStan L9](https://img.shields.io/github/actions/workflow/status/AndreyMashukov/blockchain-context-bundle/stan.yml?branch=main&label=PHPStan%20L9)](https://github.com/AndreyMashukov/blockchain-context-bundle/actions)
@@ -10,11 +10,12 @@ Symfony 7 bundle for crypto payments — autowires the pure-PHP TON + EVM SDKs i
 [![License](https://img.shields.io/packagist/l/amashukov/blockchain-context-bundle)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/AndreyMashukov/blockchain-context-bundle?style=social)](https://github.com/AndreyMashukov/blockchain-context-bundle)
 
-`amashukov/blockchain-context-bundle` is a **Symfony 7 bundle for crypto payments** that turns the pure-PHP TON + EVM SDKs ([`amashukov/ton-php`](https://github.com/AndreyMashukov/ton-php) + [`amashukov/eth-php`](https://github.com/AndreyMashukov/eth-php)) into a ready, autowired blockchain surface for your application — typed JSON-RPC clients, deposit-detection / finality / gas / deposit-tx-builder services, EIP-191 + TON Connect signature verification, and AES-256-GCM private-key encryption — all configured from one place, env-agnostic, with full DI autowiring.
+`amashukov/blockchain-context-bundle` is a **Symfony 7 bundle for crypto payments** that exposes Bitcoin Core JSON-RPC together with the pure-PHP TON + EVM SDKs ([`amashukov/ton-php`](https://github.com/AndreyMashukov/ton-php) + [`amashukov/eth-php`](https://github.com/AndreyMashukov/eth-php)) through one autowired blockchain surface.
 
 ## Features
 
-- **Autowired RPC clients** — `Amashukov\EthRpc\JsonRpcProvider` / `EthRpcClient` (ethers.js-style EVM JSON-RPC) and `Amashukov\Toncenter\ToncenterClient` (typed toncenter v2), wired over a PSR-18 transport (`amashukov/http-client-php` cURL client; toncenter gets an `X-Api-Key` + `429/5xx/542`-retry middleware pipeline).
+- **Autowired RPC clients** — a typed `BitcoinRpcClient`, `Amashukov\EthRpc\JsonRpcProvider` / `EthRpcClient`, and `Amashukov\Toncenter\ToncenterClient`, wired over PSR-18 transports.
+- **Exact Bitcoin amounts** — Bitcoin Core JSON numbers are preserved as decimal strings and converted to satoshis without floating-point arithmetic.
 - **Signing & wallet** — `Amashukov\Eip1559TxSigner\Eip1559Signer` (EIP-1559 offline signer) and `Amashukov\TonWallet\WalletV4R2` (built from a mnemonic via the bundle factory); `ToncenterWalletRpc` implements the wallet's RPC port.
 - **Per-chain domain services** (host-app-agnostic, owning ports the host implements): `Detection\ChainDepositCheckChain`, `Finality\{ConfirmationCheckChain,ConfirmationCounterRegistry,DepthPollingFinalityVerifier}`, `Gas\{EthGasFetcher,TonGasFetcher,ZeroGasFetcher}`, `TxBuilder\DepositTxBuilderChain` (+ per-chain TON / TON-Jetton / ETH / USDT-ERC20 builders), `Explorer\DefaultExplorerUrl`, `Numeric\{BcDecimal,UuidIntCodec,UsdtJettonDecimals}`, `Time\RealSleeper`.
 - **`SignatureVerifier`** — EIP-191 (`personal_sign`, secp256k1 ecrecover + Keccak-256) + Ed25519 (TON Connect) verification.
@@ -24,7 +25,7 @@ Symfony 7 bundle for crypto payments — autowires the pure-PHP TON + EVM SDKs i
 
 ## Why amashukov/blockchain-context-bundle
 
-There is no maintained Symfony bundle for crypto-payment infrastructure — most projects glue a raw RPC client into a service by hand. This bundle fills that empty niche: it wires the entire TON + EVM stack into Symfony's container with autowiring, env-agnostic config, and a tagged-iterator extension model, so adding a new chain or deposit builder is a drop-in service, not a DI rewrite.
+There is no maintained Symfony bundle for crypto-payment infrastructure — most projects glue raw RPC clients into services by hand. This bundle wires Bitcoin Core, TON and EVM services into Symfony's container with autowiring, env-agnostic config, and a tagged-iterator extension model.
 
 ## Installation
 
@@ -49,6 +50,7 @@ Inject any autowired service directly:
 ```php
 use Amashukov\EthRpc\JsonRpcProviderInterface;
 use Amashukov\Toncenter\ToncenterClientInterface;
+use Amashukov\BlockchainContextBundle\Service\Bitcoin\BitcoinRpcClientInterface;
 use Amashukov\BlockchainContextBundle\Service\SignatureVerifier;
 
 final class SomeService
@@ -56,6 +58,7 @@ final class SomeService
     public function __construct(
         private JsonRpcProviderInterface $eth,
         private ToncenterClientInterface $ton,
+        private BitcoinRpcClientInterface $bitcoin,
         private SignatureVerifier $verifier,
     ) {}
 }
@@ -63,11 +66,17 @@ final class SomeService
 
 ### Configuration
 
-The bundle is **env-agnostic**: it exposes a config tree and reads only `%blockchain_context.*%` parameters internally. The host maps them to its own environment (use `%env(...)%`, with `default:` processors as you like). Config is split per chain (`eth:` / `ton:`), each toggleable via `enabled` (default `true` — set `false` for a single-chain deployment):
+The bundle is **env-agnostic**: it exposes a config tree and reads only `%blockchain_context.*%` parameters internally. The host maps them to its own environment. Config is split per chain (`bitcoin:` / `eth:` / `ton:`), each toggleable via `enabled`:
 
 ```yaml
 # config/packages/blockchain_context.yaml
 blockchain_context:
+    bitcoin:
+        enabled:         true
+        rpc_url:        '%env(BITCOIN_RPC_URL)%'
+        rpc_user:       '%env(BITCOIN_RPC_USER)%'
+        rpc_password:   '%env(BITCOIN_RPC_PASSWORD)%'
+        timeout_seconds: 30
     eth:
         enabled:            true
         rpc_url:            '%env(ETH_RPC_URL)%'                  # EVM JSON-RPC endpoint

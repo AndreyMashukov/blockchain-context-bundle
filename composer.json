@@ -1,12 +1,14 @@
 {
     "name": "amashukov/blockchain-context-bundle",
-    "description": "Symfony 7 bundle wiring the pure-PHP TON + EVM SDKs (amashukov/ton-php + amashukov/eth-php) into an application — autowired signature verification (EIP-191 + Ed25519/TonConnect), AES-256-GCM private-key encryption, and an HD deposit-wallet deriver port.",
+    "description": "Symfony bundle providing typed Bitcoin Core, TON and EVM integration services.",
     "type": "symfony-bundle",
     "license": "MIT",
     "keywords": [
         "symfony",
         "symfony-bundle",
         "ethereum",
+        "bitcoin",
+        "bitcoin-core",
         "ton",
         "blockchain",
         "signature",
@@ -36,7 +38,6 @@
         "ext-sodium": "*",
         "amashukov/eth-php": "^0.1.0",
         "amashukov/http-client-php": "^0.1.0",
-        "amashukov/lnd-client-php": "^0.1.0",
         "amashukov/ton-php": "^0.1.0",
         "nyholm/psr7": "^1.8",
         "psr/clock": "^1.0",
