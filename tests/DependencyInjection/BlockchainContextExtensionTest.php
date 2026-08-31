@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Amashukov\BlockchainContextBundle\Tests\DependencyInjection;
 
 use Amashukov\BlockchainContextBundle\DependencyInjection\BlockchainContextExtension;
+use Amashukov\BlockchainContextBundle\Service\Bitcoin\BitcoinRpcClient;
 use Amashukov\BlockchainContextBundle\Service\Finality\ConfirmationCounterRegistry;
 use Amashukov\BlockchainContextBundle\Service\PrivKeyEncrypter;
 use Amashukov\BlockchainContextBundle\Service\SignatureVerifier;
@@ -35,6 +36,12 @@ final class BlockchainContextExtensionTest extends TestCase
                 'bridge_contract'   => 'EQbridge',
                 'finality_polls'    => 3,
             ],
+            'bitcoin' => [
+                'rpc_url'         => 'http://bitcoin-node:8332/wallet/test_wallet',
+                'rpc_user'        => 'rpc-user',
+                'rpc_password'    => 'rpc-password',
+                'timeout_seconds' => 15,
+            ],
             'deposit_wallet_encryption_key' => base64_encode(str_repeat("\x00", 32)),
         ];
     }
@@ -57,6 +64,8 @@ final class BlockchainContextExtensionTest extends TestCase
         self::assertSame(3, $container->getParameter('blockchain_context.ton.finality_polls'));
         self::assertSame('EQbridge', $container->getParameter('blockchain_context.ton.bridge_contract'));
         self::assertFalse($container->getParameter('blockchain_context.ton.enabled'));
+        self::assertSame('http://bitcoin-node:8332/wallet/test_wallet', $container->getParameter('blockchain_context.bitcoin.rpc_url'));
+        self::assertSame(15, $container->getParameter('blockchain_context.bitcoin.timeout_seconds'));
     }
 
     public function testDefaultsApplyWhenHostOmitsConfig(): void
@@ -70,6 +79,8 @@ final class BlockchainContextExtensionTest extends TestCase
         self::assertSame('https://tonscan.org', $container->getParameter('blockchain_context.ton.explorer'));
         self::assertTrue($container->getParameter('blockchain_context.eth.enabled'));
         self::assertTrue($container->getParameter('blockchain_context.ton.enabled'));
+        self::assertSame('', $container->getParameter('blockchain_context.bitcoin.rpc_url'));
+        self::assertSame(30, $container->getParameter('blockchain_context.bitcoin.timeout_seconds'));
     }
 
     public function testCoreServicesAreRegistered(): void
@@ -78,6 +89,7 @@ final class BlockchainContextExtensionTest extends TestCase
 
         self::assertTrue($container->hasDefinition(SignatureVerifier::class));
         self::assertTrue($container->hasDefinition(PrivKeyEncrypter::class));
+        self::assertTrue($container->hasDefinition(BitcoinRpcClient::class));
     }
 
     public function testPrivKeyEncrypterMasterKeyBoundToConfigParameter(): void
