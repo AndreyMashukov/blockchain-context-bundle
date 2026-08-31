@@ -83,6 +83,23 @@ final class BlockchainContextExtensionTest extends TestCase
         self::assertSame(30, $container->getParameter('blockchain_context.bitcoin.timeout_seconds'));
     }
 
+    public function testBitcoinTimeoutAcceptsAnEnvironmentPlaceholder(): void
+    {
+        $container = new ContainerBuilder();
+        (new BlockchainContextExtension())->load([
+            [
+                'bitcoin' => [
+                    'timeout_seconds' => 'env_4f3c1a0b_BITCOIN_RPC_TIMEOUT_SECONDS_5d76eaa4',
+                ],
+            ],
+        ], $container);
+
+        self::assertSame(
+            'env_4f3c1a0b_BITCOIN_RPC_TIMEOUT_SECONDS_5d76eaa4',
+            $container->getParameter('blockchain_context.bitcoin.timeout_seconds'),
+        );
+    }
+
     public function testCoreServicesAreRegistered(): void
     {
         $container = $this->load();
