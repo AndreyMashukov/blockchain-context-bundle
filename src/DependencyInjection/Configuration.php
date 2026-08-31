@@ -41,7 +41,7 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('rpc_url')->defaultValue('')->end()
                         ->scalarNode('rpc_user')->defaultValue('')->end()
                         ->scalarNode('rpc_password')->defaultValue('')->end()
-                        ->integerNode('timeout_seconds')->defaultValue(30)->min(1)->end()
+                        ->scalarNode('timeout_seconds')->defaultValue(30)->end()
                     ->end()
                 ->end()
                 ->scalarNode('deposit_wallet_encryption_key')->defaultValue('')->end()
