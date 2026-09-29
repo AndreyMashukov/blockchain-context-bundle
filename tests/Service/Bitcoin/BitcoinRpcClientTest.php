@@ -44,13 +44,13 @@ final class BitcoinRpcClientTest extends TestCase
     public function testWalletInfoReadsBalancesFromGetBalances(): void
     {
         $client = $this->client($this->http([
-            '{"result":{"walletname":"stargate-hot","walletversion":169900,"txcount":0,"private_keys_enabled":true,"descriptors":true,"unlocked_until":0},"error":null,"id":"bitcoin-core"}',
+            '{"result":{"walletname":"hot-wallet","walletversion":169900,"txcount":0,"private_keys_enabled":true,"descriptors":true,"unlocked_until":0},"error":null,"id":"bitcoin-core"}',
             '{"result":{"mine":{"trusted":0.05000001,"untrusted_pending":0.00000002,"immature":0.00000000}},"error":null,"id":"bitcoin-core"}',
         ]));
 
         $wallet = $client->getWalletInfo();
 
-        self::assertSame('stargate-hot', $wallet->walletName);
+        self::assertSame('hot-wallet', $wallet->walletName);
         self::assertSame('5000001', $wallet->balance->satoshis);
         self::assertSame('2', $wallet->unconfirmedBalance->satoshis);
         self::assertSame(0, $wallet->unlockedUntil);
@@ -90,6 +90,9 @@ final class BitcoinRpcClientTest extends TestCase
         );
     }
 
+    /**
+     * @param string|list<string> $body
+     */
     private function http(string|array $body): RecordingHttpClient
     {
         return new RecordingHttpClient($body);
