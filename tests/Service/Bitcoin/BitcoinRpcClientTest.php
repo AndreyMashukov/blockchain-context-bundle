@@ -41,6 +41,40 @@ final class BitcoinRpcClientTest extends TestCase
         }
     }
 
+    public function testWalletInfoReadsBalancesFromGetBalances(): void
+    {
+        $client = $this->client($this->http([
+            '{"result":{"walletname":"stargate-hot","walletversion":169900,"txcount":0,"private_keys_enabled":true,"descriptors":true,"unlocked_until":0},"error":null,"id":"bitcoin-core"}',
+            '{"result":{"mine":{"trusted":0.05000001,"untrusted_pending":0.00000002,"immature":0.00000000}},"error":null,"id":"bitcoin-core"}',
+        ]));
+
+        $wallet = $client->getWalletInfo();
+
+        self::assertSame('stargate-hot', $wallet->walletName);
+        self::assertSame('5000001', $wallet->balance->satoshis);
+        self::assertSame('2', $wallet->unconfirmedBalance->satoshis);
+        self::assertSame(0, $wallet->unlockedUntil);
+    }
+
+    public function testGetAddressInfoAcceptsWalletResponseWithoutIsValid(): void
+    {
+        $client = $this->client($this->http('{"result":{"address":"bc1qexample","ismine":true,"iswatchonly":false,"scriptPubKey":"0014abcd","desc":"wpkh(example)#checksum"},"error":null,"id":"bitcoin-core"}'));
+
+        $address = $client->getAddressInfo('bc1qexample');
+
+        self::assertTrue($address->isValid);
+        self::assertTrue($address->isMine);
+        self::assertFalse($address->isWatchOnly);
+        self::assertSame('wpkh(example)#checksum', $address->descriptor);
+    }
+
+    public function testValidateAddressStillRequiresIsValid(): void
+    {
+        $client = $this->client($this->http('{"result":{"isvalid":false},"error":null,"id":"bitcoin-core"}'));
+
+        self::assertFalse($client->validateAddress('invalid')->isValid);
+    }
+
     private function client(ClientInterface $http): BitcoinRpcClient
     {
         $factory = new Psr17Factory();
@@ -56,7 +90,7 @@ final class BitcoinRpcClientTest extends TestCase
         );
     }
 
-    private function http(string $body): RecordingHttpClient
+    private function http(string|array $body): RecordingHttpClient
     {
         return new RecordingHttpClient($body);
     }

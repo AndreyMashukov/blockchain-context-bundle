@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Amashukov\BlockchainContextBundle\Tests\Helper;
 
+use LogicException;
 use Nyholm\Psr7\Response;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
@@ -13,12 +14,28 @@ final class RecordingHttpClient implements ClientInterface
 {
     public ?RequestInterface $request = null;
 
-    public function __construct(private readonly string $body) {}
+    /**
+     * @var list<string>
+     */
+    private array $bodies;
+
+    /**
+     * @param string|list<string> $body
+     */
+    public function __construct(string|array $body)
+    {
+        $this->bodies = is_string($body) ? [$body] : $body;
+    }
 
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
         $this->request = $request;
 
-        return new Response(200, [], $this->body);
+        $body = array_shift($this->bodies);
+        if (null === $body) {
+            throw new LogicException('No queued Bitcoin RPC response.');
+        }
+
+        return new Response(200, [], $body);
     }
 }

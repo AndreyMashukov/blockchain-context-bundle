@@ -27,4 +27,18 @@ final readonly class BitcoinAddressInfo
             BitcoinRpcValue::nullableString($row, 'desc'),
         );
     }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    public static function fromWalletArray(array $row): self
+    {
+        return new self(
+            true,
+            BitcoinRpcValue::bool($row, 'ismine'),
+            BitcoinRpcValue::bool($row, 'iswatchonly'),
+            BitcoinRpcValue::nullableString($row, 'scriptPubKey'),
+            BitcoinRpcValue::nullableString($row, 'desc'),
+        );
+    }
 }

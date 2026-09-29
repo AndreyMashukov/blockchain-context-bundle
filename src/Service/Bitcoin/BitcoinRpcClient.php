@@ -29,7 +29,12 @@ final readonly class BitcoinRpcClient implements BitcoinRpcClientInterface
 
     public function getWalletInfo(): BitcoinWalletInfo
     {
-        return BitcoinWalletInfo::fromArray($this->objectResult('getwalletinfo'));
+        $wallet   = $this->objectResult('getwalletinfo');
+        $balances = BitcoinRpcValue::object($this->objectResult('getbalances'), 'mine');
+        $wallet['balance'] = BitcoinRpcValue::string($balances, 'trusted');
+        $wallet['unconfirmed_balance'] = BitcoinRpcValue::string($balances, 'untrusted_pending');
+
+        return BitcoinWalletInfo::fromArray($wallet);
     }
 
     public function createWallet(string $name, string $passphrase = '', bool $avoidReuse = true): void
@@ -49,7 +54,7 @@ final readonly class BitcoinRpcClient implements BitcoinRpcClientInterface
 
     public function getAddressInfo(string $address): BitcoinAddressInfo
     {
-        return BitcoinAddressInfo::fromArray($this->objectResult('getaddressinfo', [$address]));
+        return BitcoinAddressInfo::fromWalletArray($this->objectResult('getaddressinfo', [$address]));
     }
 
     public function validateAddress(string $address): BitcoinAddressInfo
