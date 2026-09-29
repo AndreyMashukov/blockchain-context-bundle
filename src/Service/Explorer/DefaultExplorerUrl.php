@@ -9,6 +9,7 @@ final readonly class DefaultExplorerUrl implements ExplorerUrlInterface
     public function __construct(
         private string $bridgeEthExplorer = 'https://etherscan.io',
         private string $tonExplorer = 'https://tonscan.org',
+        private string $bitcoinExplorer = 'https://mempool.space',
     ) {}
 
     public function forTx(string $chain, string $txHashOrLt): ?string
@@ -42,6 +43,7 @@ final readonly class DefaultExplorerUrl implements ExplorerUrlInterface
         return match ($chain) {
             'eth', 'usdt_erc20'   => '' !== $this->bridgeEthExplorer ? $this->bridgeEthExplorer : 'https://etherscan.io',
             'ton', 'usdt_jetton'  => $this->tonExplorer,
+            'btc'                 => '' !== $this->bitcoinExplorer ? $this->bitcoinExplorer : null,
             default               => null,
         };
     }

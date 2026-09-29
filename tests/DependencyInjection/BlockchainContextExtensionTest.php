@@ -81,6 +81,7 @@ final class BlockchainContextExtensionTest extends TestCase
         self::assertTrue($container->getParameter('blockchain_context.ton.enabled'));
         self::assertSame('', $container->getParameter('blockchain_context.bitcoin.rpc_url'));
         self::assertSame(30, $container->getParameter('blockchain_context.bitcoin.timeout_seconds'));
+        self::assertSame('https://mempool.space', $container->getParameter('blockchain_context.bitcoin.explorer'));
     }
 
     public function testBitcoinTimeoutAcceptsAnEnvironmentPlaceholder(): void

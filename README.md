@@ -77,6 +77,7 @@ blockchain_context:
         rpc_user:       '%env(BITCOIN_RPC_USER)%'
         rpc_password:   '%env(BITCOIN_RPC_PASSWORD)%'
         timeout_seconds: 30
+        explorer:       '%env(BITCOIN_EXPLORER)%'           # default https://mempool.space; '' disables links (regtest)
     eth:
         enabled:            true
         rpc_url:            '%env(ETH_RPC_URL)%'                  # EVM JSON-RPC endpoint

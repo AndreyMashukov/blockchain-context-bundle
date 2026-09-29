@@ -42,6 +42,7 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('rpc_user')->defaultValue('')->end()
                         ->scalarNode('rpc_password')->defaultValue('')->end()
                         ->scalarNode('timeout_seconds')->defaultValue(30)->end()
+                        ->scalarNode('explorer')->defaultValue('https://mempool.space')->end()
                     ->end()
                 ->end()
                 ->scalarNode('deposit_wallet_encryption_key')->defaultValue('')->end()
