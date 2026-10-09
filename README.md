@@ -21,6 +21,7 @@ Symfony 7 bundle for crypto payments — provides typed Bitcoin Core, TON and EV
 - **`SignatureVerifier`** — EIP-191 (`personal_sign`, secp256k1 ecrecover + Keccak-256) + Ed25519 (TON Connect) verification.
 - **`PrivKeyEncrypter`** — AES-256-GCM authenticated encryption for keys at rest.
 - **`DepositWalletDeriverInterface`** port + `DerivedWallet` / `DepositEvidence` value objects.
+- **HD deposit wallets** — `Service\Hd\EvmHdDeriver` (BIP39 seed → BIP32 secp256k1, `m/44'/60'/{account}'/0/{index}`, lowercase `0x` address) and `Service\Hd\TonHdDeriver` (BIP39 seed → SLIP-0010 ed25519, `m/44'/607'/{account}'/0'/{index}'`, WalletV4R2 non-bounceable `UQ…` address) implement `DepositWalletDeriverInterface`. One mnemonic serves any number of separate address spaces through the `account` argument; `TonHdDeriver::wallet($index)` returns the signing `WalletV4R2`. The TON keys come from a BIP39 seed, not from a TON-native mnemonic, so wallet apps cannot import them from the phrase — recovery goes through the deriver. Pinned against the official BIP32 / SLIP-0010 / BIP39 vectors and against wallets derived by ethers and @ton/ton.
 - **Tagged-iterator chains** — `ChainDepositCheckChain`, `ConfirmationCheckChain`, `ConfirmationCounterRegistry`, and `DepositTxBuilderChain` auto-collect their members via bundle-namespaced tags (`blockchain_context.*`); drop a new impl and it joins the chain with no DI edits.
 
 ## Why amashukov/blockchain-context-bundle
