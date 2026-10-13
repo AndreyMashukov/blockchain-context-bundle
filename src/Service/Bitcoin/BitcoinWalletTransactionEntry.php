@@ -14,6 +14,8 @@ final readonly class BitcoinWalletTransactionEntry
         public BitcoinAmount $amount,
         public int $confirmations,
         public ?string $blockHash,
+        public ?int $blockTime = null,
+        public ?int $timeReceived = null,
     ) {}
 
     /**
@@ -29,6 +31,8 @@ final readonly class BitcoinWalletTransactionEntry
             BitcoinAmount::fromDecimal(BitcoinRpcValue::string($row, 'amount')),
             BitcoinRpcValue::int($row, 'confirmations'),
             BitcoinRpcValue::nullableString($row, 'blockhash'),
+            BitcoinRpcValue::nullableTimestamp($row, 'blocktime'),
+            BitcoinRpcValue::nullableTimestamp($row, 'timereceived'),
         );
     }
 }

@@ -15,6 +15,8 @@ final readonly class BitcoinWalletTransaction
         public string $hex,
         public ?string $replacedByTxid,
         public ?string $replacesTxid,
+        public ?int $blockTime = null,
+        public ?int $timeReceived = null,
     ) {}
 
     /**
@@ -33,6 +35,8 @@ final readonly class BitcoinWalletTransaction
             BitcoinRpcValue::string($row, 'hex'),
             BitcoinRpcValue::nullableString($row, 'replaced_by_txid'),
             BitcoinRpcValue::nullableString($row, 'replaces_txid'),
+            BitcoinRpcValue::nullableTimestamp($row, 'blocktime'),
+            BitcoinRpcValue::nullableTimestamp($row, 'timereceived'),
         );
     }
 }

@@ -65,6 +65,10 @@ final class SomeService
 }
 ```
 
+### Bitcoin transaction timestamps
+
+Bitcoin wallet transaction DTOs expose optional `blockTime` (mined block timestamp) and `timeReceived` (wallet first receipt). Missing fields remain `null`; malformed, negative, fractional and overflowing timestamps fail decoding. These are separate evidence clocks, not an inferred payment timestamp. Existing constructor calls remain compatible.
+
 ### Configuration
 
 The bundle is **env-agnostic**: it exposes a config tree and reads only `%blockchain_context.*%` parameters internally. The host maps them to its own environment. Config is split per chain (`bitcoin:` / `eth:` / `ton:`), each toggleable via `enabled`:
