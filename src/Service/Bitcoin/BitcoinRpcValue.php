@@ -47,6 +47,24 @@ final readonly class BitcoinRpcValue
     /**
      * @param array<string, mixed> $row
      */
+    public static function nullableTimestamp(array $row, string $key): ?int
+    {
+        $value = self::nullableString($row, $key);
+        if (null === $value) {
+            return null;
+        }
+        if (1 !== preg_match('/^(0|[1-9][0-9]*)$/', $value)
+            || strlen($value) > strlen((string) PHP_INT_MAX)
+            || (strlen($value) === strlen((string) PHP_INT_MAX) && strcmp($value, (string) PHP_INT_MAX) > 0)) {
+            throw new BitcoinRpcException(sprintf('Bitcoin Core field "%s" must be a non-negative integer timestamp within platform range.', $key));
+        }
+
+        return (int) $value;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
     public static function bool(array $row, string $key): bool
     {
         $value = $row[$key] ?? null;
