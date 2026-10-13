@@ -68,6 +68,8 @@ interface BitcoinRpcClientInterface
 
     public function getTransaction(string $txid): BitcoinWalletTransaction;
 
+    public function getRawTransaction(string $txid, ?string $blockHash = null): BitcoinRawTransaction;
+
     /**
      * @return null|array<string, mixed>
      */

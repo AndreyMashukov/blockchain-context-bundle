@@ -152,6 +152,16 @@ final readonly class BitcoinRpcClient implements BitcoinRpcClientInterface
         return $this->stringResult('sendrawtransaction', [$hex, $maximumFeeRate]);
     }
 
+    public function getRawTransaction(string $txid, ?string $blockHash = null): BitcoinRawTransaction
+    {
+        $params = null === $blockHash ? [$txid, 2] : [$txid, 2, $blockHash];
+        $transaction = BitcoinRawTransaction::fromArray($this->objectResult('getrawtransaction', $params));
+        if (strtolower($transaction->txid) !== strtolower($txid) || (null !== $blockHash && $transaction->blockHash !== $blockHash)) {
+            throw new BitcoinRpcException('Bitcoin Core returned another transaction or block for the requested fee evidence.');
+        }
+        return $transaction;
+    }
+
     public function getTransaction(string $txid): BitcoinWalletTransaction
     {
         return BitcoinWalletTransaction::fromArray($this->objectResult('gettransaction', [$txid, true, true]));

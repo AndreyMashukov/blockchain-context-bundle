@@ -135,3 +135,7 @@ composer rector   # Rector (dry-run)
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+### Bitcoin transaction fee evidence
+
+`BitcoinRpcClientInterface::getRawTransaction($txid, $blockHash)` uses [Core verbosity 2](https://bitcoincore.org/en/doc/28.0.0/rpc/rawtransactions/getrawtransaction/) and returns typed inputs, outputs and block identity. `BitcoinRawTransaction::fee` is the exact complete input-minus-output sum; missing previous outputs or coinbase inputs leave it `null`. A proven zero stays zero. A conflicting reported fee or a returned transaction/block identity mismatch throws. Callers must check active-chain evidence and classify payer ownership separately. The whole transaction fee is not additive across multiple deposit outputs. Existing wallet transaction fee defaults are unchanged and must not be treated as proof of an external payer’s fee.
