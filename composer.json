@@ -36,6 +36,7 @@
         "ext-gmp": "*",
         "ext-openssl": "*",
         "ext-sodium": "*",
+        "amashukov/bchn-rpc-client-php": "^0.2.0",
         "amashukov/eth-php": "^0.1.0",
         "amashukov/http-client-php": "^0.1.0",
         "amashukov/ton-php": "^0.1.0",

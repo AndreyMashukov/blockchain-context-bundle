@@ -1,6 +1,6 @@
 # amashukov/blockchain-context-bundle
 
-Symfony 7 bundle for crypto payments — provides typed Bitcoin Core, TON and EVM clients alongside signature, finality and transaction-building services.
+Symfony 7 bundle for crypto payments — provides typed Bitcoin Core, Bitcoin Cash Node, TON and EVM clients alongside signature, finality and transaction-building services.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/AndreyMashukov/blockchain-context-bundle/ci.yml?branch=main&label=CI)](https://github.com/AndreyMashukov/blockchain-context-bundle/actions)
 [![PHPStan L9](https://img.shields.io/github/actions/workflow/status/AndreyMashukov/blockchain-context-bundle/stan.yml?branch=main&label=PHPStan%20L9)](https://github.com/AndreyMashukov/blockchain-context-bundle/actions)
@@ -135,6 +135,32 @@ composer rector   # Rector (dry-run)
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+### Bitcoin Cash Node
+
+`BitcoinCashNodeRpcClient` implements the same `BitcoinRpcClientInterface` on top of [`amashukov/bchn-rpc-client-php`](https://github.com/AndreyMashukov/bchn-rpc-client-php), so code written for Bitcoin Core can drive a [Bitcoin Cash Node](https://bitcoincashnode.org) wallet (tested against BCHN v29.2.0):
+
+- answers come back in the Core shape — `decodeRawTransaction()` reports `vsize = size` and `weight = 4 × size` (no SegWit), an output with exactly one address gets `scriptPubKey.address`, OP_RETURN outputs keep no address;
+- `walletProcessPsbt()` signs with `ALL|FORKID`; `createPsbt()` builds from explicit inputs and outputs;
+- `estimateSmartFee()` reads `estimatefee` (BCH per kB);
+- `listUnspent(..., includeTokens: true)` returns CashToken outputs with `tokenData`;
+- `lockUnspent()` has no persistent flag on BCHN — locks are lost when the node restarts, so keep your own record of reserved inputs;
+- `walletCreateFundedPsbt()` and `psbtBumpFee()` throw: BCHN keeps the first-seen transaction, there is no fee bumping.
+
+Wire it as a second service next to the Core client:
+
+```yaml
+Amashukov\BchnRpc\BchnRpcClient:
+    arguments:
+        $rpcUrl: '%env(BCH_RPC_URL)%'
+        $rpcUser: '%env(BCH_RPC_USER)%'
+        $rpcPassword: '%env(BCH_RPC_PASSWORD)%'
+Amashukov\BlockchainContextBundle\Service\Bitcoin\BitcoinCashNodeRpcClient:
+    arguments:
+        $node: '@Amashukov\BchnRpc\BchnRpcClient'
+```
+
+`createPsbt()` and `getTxOut()` are available on the Core client as well; `BitcoinAddressInfo::hdKeyPath`, `BitcoinWalletInfo::hdSeedId` and `BitcoinUnspentOutput::tokenData` are optional fields (`null` on Core where it has no such data).
 
 ### Bitcoin transaction fee evidence
 

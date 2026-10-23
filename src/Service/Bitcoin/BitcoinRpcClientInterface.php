@@ -27,7 +27,7 @@ interface BitcoinRpcClientInterface
      *
      * @return list<BitcoinUnspentOutput>
      */
-    public function listUnspent(int $minimumConfirmations = 1, int $maximumConfirmations = 9999999, array $addresses = []): array;
+    public function listUnspent(int $minimumConfirmations = 1, int $maximumConfirmations = 9999999, array $addresses = [], bool $includeTokens = false): array;
 
     /**
      * @return list<BitcoinOutpoint>
@@ -47,6 +47,12 @@ interface BitcoinRpcClientInterface
      * @param array<string, mixed> $options
      */
     public function walletCreateFundedPsbt(array $inputs, array $outputs, array $options): BitcoinFundedPsbt;
+
+    /**
+     * @param list<BitcoinOutpoint>       $inputs
+     * @param list<array<string, string>> $outputs
+     */
+    public function createPsbt(array $inputs, array $outputs): string;
 
     public function walletProcessPsbt(string $psbt, bool $sign = true): BitcoinProcessedPsbt;
 
@@ -69,6 +75,8 @@ interface BitcoinRpcClientInterface
     public function getTransaction(string $txid): BitcoinWalletTransaction;
 
     public function getRawTransaction(string $txid, ?string $blockHash = null): BitcoinRawTransaction;
+
+    public function getTxOut(string $txid, int $vout, bool $includeMempool = true): ?BitcoinTxOut;
 
     /**
      * @return null|array<string, mixed>

@@ -67,7 +67,7 @@ final readonly class BitcoinRpcClient implements BitcoinRpcClientInterface
         return BitcoinListSinceBlock::fromArray($this->objectResult('listsinceblock', [$blockHash, $targetConfirmations, false, true, false]));
     }
 
-    public function listUnspent(int $minimumConfirmations = 1, int $maximumConfirmations = 9999999, array $addresses = []): array
+    public function listUnspent(int $minimumConfirmations = 1, int $maximumConfirmations = 9999999, array $addresses = [], bool $includeTokens = false): array
     {
         $result = $this->listResult('listunspent', [$minimumConfirmations, $maximumConfirmations, $addresses, true]);
         $utxos  = [];
@@ -116,6 +116,11 @@ final readonly class BitcoinRpcClient implements BitcoinRpcClientInterface
         return BitcoinFundedPsbt::fromArray($this->objectResult('walletcreatefundedpsbt', [$inputRows, $outputs, 0, $options, true]));
     }
 
+    public function createPsbt(array $inputs, array $outputs): string
+    {
+        return $this->stringResult('createpsbt', [array_map(static fn(BitcoinOutpoint $outpoint): array => $outpoint->toArray(), $inputs), $outputs]);
+    }
+
     public function walletProcessPsbt(string $psbt, bool $sign = true): BitcoinProcessedPsbt
     {
         return BitcoinProcessedPsbt::fromArray($this->objectResult('walletprocesspsbt', [$psbt, $sign, 'ALL', true]));
@@ -160,6 +165,13 @@ final readonly class BitcoinRpcClient implements BitcoinRpcClientInterface
             throw new BitcoinRpcException('Bitcoin Core returned another transaction or block for the requested fee evidence.');
         }
         return $transaction;
+    }
+
+    public function getTxOut(string $txid, int $vout, bool $includeMempool = true): ?BitcoinTxOut
+    {
+        $result = $this->call('gettxout', [$txid, $vout, $includeMempool]);
+
+        return null === $result ? null : BitcoinTxOut::fromArray(BitcoinRpcValue::map($result, 'gettxout result'));
     }
 
     public function getTransaction(string $txid): BitcoinWalletTransaction

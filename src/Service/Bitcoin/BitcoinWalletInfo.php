@@ -15,6 +15,7 @@ final readonly class BitcoinWalletInfo
         public bool $privateKeysEnabled,
         public bool $descriptors,
         public ?int $unlockedUntil,
+        public ?string $hdSeedId = null,
     ) {}
 
     /**

@@ -14,6 +14,7 @@ final readonly class BitcoinUnspentOutput
         public bool $spendable,
         public bool $solvable,
         public bool $safe,
+        public ?BitcoinTokenData $tokenData = null,
     ) {}
 
     /**

@@ -12,6 +12,7 @@ final readonly class BitcoinAddressInfo
         public bool $isWatchOnly,
         public ?string $scriptPubKey,
         public ?string $descriptor,
+        public ?string $hdKeyPath = null,
     ) {}
 
     /**
@@ -39,6 +40,7 @@ final readonly class BitcoinAddressInfo
             BitcoinRpcValue::bool($row, 'iswatchonly'),
             BitcoinRpcValue::nullableString($row, 'scriptPubKey'),
             BitcoinRpcValue::nullableString($row, 'desc'),
+            BitcoinRpcValue::nullableString($row, 'hdkeypath'),
         );
     }
 }
