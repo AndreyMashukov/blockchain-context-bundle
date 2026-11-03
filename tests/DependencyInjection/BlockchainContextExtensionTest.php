@@ -77,6 +77,8 @@ final class BlockchainContextExtensionTest extends TestCase
         self::assertSame(0, $container->getParameter('blockchain_context.eth.chain_id'));
         self::assertSame(0, $container->getParameter('blockchain_context.ton.finality_polls'));
         self::assertSame('https://tonscan.org', $container->getParameter('blockchain_context.ton.explorer'));
+        self::assertSame(60, $container->getParameter('blockchain_context.ton.timeout_seconds'));
+        self::assertSame(60, $container->getParameter('blockchain_context.ton.connect_timeout_seconds'));
         self::assertTrue($container->getParameter('blockchain_context.eth.enabled'));
         self::assertTrue($container->getParameter('blockchain_context.ton.enabled'));
         self::assertSame('', $container->getParameter('blockchain_context.bitcoin.rpc_url'));
@@ -99,6 +101,22 @@ final class BlockchainContextExtensionTest extends TestCase
             'env_4f3c1a0b_BITCOIN_RPC_TIMEOUT_SECONDS_5d76eaa4',
             $container->getParameter('blockchain_context.bitcoin.timeout_seconds'),
         );
+    }
+
+    public function testTonTimeoutsAcceptEnvironmentPlaceholders(): void
+    {
+        $container = new ContainerBuilder();
+        (new BlockchainContextExtension())->load([
+            [
+                'ton' => [
+                    'timeout_seconds'         => 'env_7a1b2c3d_TON_HTTP_TIMEOUT_SECONDS_8e9f0a1b',
+                    'connect_timeout_seconds' => 'env_2b3c4d5e_TON_HTTP_CONNECT_TIMEOUT_SECONDS_6f7a8b9c',
+                ],
+            ],
+        ], $container);
+
+        self::assertSame('env_7a1b2c3d_TON_HTTP_TIMEOUT_SECONDS_8e9f0a1b', $container->getParameter('blockchain_context.ton.timeout_seconds'));
+        self::assertSame('env_2b3c4d5e_TON_HTTP_CONNECT_TIMEOUT_SECONDS_6f7a8b9c', $container->getParameter('blockchain_context.ton.connect_timeout_seconds'));
     }
 
     public function testCoreServicesAreRegistered(): void

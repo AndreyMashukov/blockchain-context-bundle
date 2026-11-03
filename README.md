@@ -97,6 +97,8 @@ blockchain_context:
         wallet_mnemonic:   '%env(BRIDGE_TON_WALLET_MNEMONIC)%'
         bridge_contract:   '%env(BRIDGE_TON_CONTRACT)%'          # USDT-Jetton deposits
         finality_polls:    '%env(int:TON_FINALITY_POLLS)%'       # 0 = skip depth re-poll
+        timeout_seconds:   '%env(int:TON_HTTP_TIMEOUT_SECONDS)%'  # toncenter response timeout, default 60
+        connect_timeout_seconds: '%env(int:TON_HTTP_CONNECT_TIMEOUT_SECONDS)%' # default 60
         explorer:          '%env(TON_EXPLORER)%'                 # default https://tonscan.org
     deposit_wallet_encryption_key: '%env(DEPOSIT_WALLET_ENCRYPTION_KEY)%' # base64 of 32 bytes
 ```

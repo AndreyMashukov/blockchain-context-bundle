@@ -32,6 +32,8 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('wallet_mnemonic')->defaultValue('')->end()
                         ->scalarNode('bridge_contract')->defaultValue('')->end()
                         ->integerNode('finality_polls')->defaultValue(0)->min(0)->end()
+                        ->scalarNode('timeout_seconds')->defaultValue(60)->end()
+                        ->scalarNode('connect_timeout_seconds')->defaultValue(60)->end()
                         ->scalarNode('explorer')->defaultValue('https://tonscan.org')->end()
                     ->end()
                 ->end()

@@ -48,8 +48,8 @@ services:
         arguments:
             $responseFactory: '@Psr\Http\Message\ResponseFactoryInterface'
             $streamFactory: '@Psr\Http\Message\StreamFactoryInterface'
-            $timeoutSeconds: 60
-            $connectTimeoutSeconds: 60
+            $timeoutSeconds: '%blockchain_context.ton.timeout_seconds%'
+            $connectTimeoutSeconds: '%blockchain_context.ton.connect_timeout_seconds%'
 
     blockchain_context.toncenter_retry:
         class: Amashukov\HttpClient\Middleware\RetryMiddleware
